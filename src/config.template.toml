@@ -1,0 +1,103 @@
+# lvim-fuzzy (lfz): every setting of the config, commented out.
+#
+# The file: ~/.config/lvim-fuzzy/config.toml ($LVIM_FUZZY_CONFIG, --config PATH,
+# --no-config). Remove the `#` before a line to use it. The whole file is
+# checked before the finder starts; every problem is reported with its line
+# (`lfz config check` only checks).
+#
+# Order: the settings here -> $LVIM_FUZZY_DEFAULT_OPTS -> the command line. A
+# later one wins. Every setting here is also an option: `lfz --help`, `lfz --man`.
+
+# --- Look ---------------------------------------------------------------------
+
+# theme     = "LvimNord_dark"   # an lvim theme (F5 picks one; ~/.config/lvim-fuzzy/themes)
+# bar       = "bottom"          # the button bar: top | bottom
+# title_pos = "left"            # the title: left | center | right
+# editor    = "nvim"            # what `open` (enter) starts: nvim | vim | hx | code | ...,
+#                               # or a template: "kak +{line} {file}"
+# options   = ["--cycle"]       # any lvim-fuzzy option
+
+# --- Texts --------------------------------------------------------------------
+
+# [text]
+# search     = "Search"         # the label before the query
+# no_matches = "[no matches]"
+# loading    = "loading…"
+# marker     = "➤"              # before a selected row (Tab)
+
+# --- What is shown ------------------------------------------------------------
+
+# [show]
+# title         = true          # the title bar (the counter lives in it)
+# counter       = true          # the match count
+# search_label  = true          # the "Search" label before the query
+# footer        = true          # the button bar with the keys
+# icons         = true          # file icons (list and preview title)
+# preview_title = true          # the file name above the preview
+# separator     = true          # the line between the list and the preview
+
+# --- File icons (lvim-icons' set by default) ----------------------------------
+
+# [icons]
+# enabled = true
+# rs   = ""                    # by extension …
+# "Cargo.toml" = ["", "orange"] # … or by file name, with a theme colour
+# dir  = "󰉋"                    # directories
+
+# --- Popups (notifications, F1 help, F2 modes, F5 themes) ---------------------
+
+# [popup]
+# border = [" ", " ", " ", " ", " ", " ", " ", " "]
+#   # Neovim's order: top-left, top, top-right, right, bottom-right, bottom,
+#   # bottom-left, left ("" leaves a side out), or a style: rounded, sharp,
+#   # bold, double, block, thinblock, space, none
+
+# --- Preview ------------------------------------------------------------------
+
+# [preview]
+# order        = ["nvim", "file", "command"]   # tried in turn; add your previewers' names
+# nvim         = "nvim"                       # the Neovim of the preview
+# nvim_appname = "nvim-preview"               # its NVIM_APPNAME (a lighter config)
+
+# [previewers.bat]              # your own preview: bat, glow, eza --tree, ...
+# command    = "bat --color=always --style=numbers --highlight-line {line} {file}"
+# for        = "file"           # file | dir | any
+# requires   = ["bat"]          # skipped when bat is missing
+# extensions = ["md"]           # only these file types
+
+# --- Keys ---------------------------------------------------------------------
+# key = "action" ( `lfz --bind-help`). Defaults:
+# F1 help, F2 modes, F3 grep ⇄ filter, F4 scope, F5 themes,
+# Tab select, enter open, ctrl-y print, ctrl-] preview focus, alt-p preview side.
+
+# [keys]
+# "ctrl-o" = "execute(less {})"
+# "alt-a"  = "select-all"
+# "alt-d"  = "deselect-all"
+
+# --- Your modes (in the F2 menu and `lfz <name>`) -----------------------------
+
+# [modes.todo]
+# description = "TODO and FIXME comments"
+# title       = "TODO"
+# command     = "rg -n --no-heading 'TODO|FIXME'"
+# target      = "{1}:{2}"       # file:line, for the preview and `open`
+# scope       = "line"          # line | path | file | all
+# open        = "nvim +{2} {1}" # what enter does here: a command or an action
+# live        = true            # run the command again with {q} on every change
+# pattern     = true            # run once with the query, then filter
+# preview     = "bat --color=always {1}"
+# requires    = ["rg"]
+# options     = ["--multi"]
+
+# --- Shell integration (eval "$(lfz --zsh)"; nothing is bound by default) ----
+
+# [shell]
+# completion = "**"             # <Tab> completion trigger (zsh, fish)
+# height     = "50%"            # below the prompt, outside Zellij / tmux
+# popup      = "center,80%"     # a floating pane in Zellij / tmux
+#
+# [shell.keys]                  # key = "MODE[:insert|cd|replace]"
+# "ctrl-t" = "files"            # insert the chosen items at the cursor
+# "ctrl-r" = "shell-history"    # the shell's history (replaces the line)
+# "alt-c"  = "dirs:cd"          # cd into the chosen directory
