@@ -267,7 +267,11 @@ impl Term {
         };
         terminal::enable_raw_mode()?;
         if fullscreen {
-            execute!(out, terminal::EnterAlternateScreen, cursor::Hide)?;
+            if keeps_screen() {
+                execute!(out, cursor::Hide)?;
+            } else {
+                execute!(out, terminal::EnterAlternateScreen, cursor::Hide)?;
+            }
         } else {
             // make room below the cursor: print newlines, then go back up
             queue!(out, cursor::Hide, cursor::MoveToColumn(0))?;
@@ -310,7 +314,7 @@ impl Term {
             queue!(self.out, cursor::SetCursorStyle::DefaultUserShape)?;
         }
         self.clear_region()?;
-        if self.fullscreen {
+        if self.fullscreen && !keeps_screen() {
             queue!(self.out, terminal::LeaveAlternateScreen)?;
         }
         queue!(self.out, cursor::Show)?;
@@ -322,7 +326,9 @@ impl Term {
     fn resume(&mut self) -> std::io::Result<()> {
         terminal::enable_raw_mode()?;
         if self.fullscreen {
-            queue!(self.out, terminal::EnterAlternateScreen)?;
+            if !keeps_screen() {
+                queue!(self.out, terminal::EnterAlternateScreen)?;
+            }
         } else {
             queue!(self.out, cursor::MoveToColumn(0))?;
             for _ in 1..self.height {
@@ -530,6 +536,13 @@ fn preview_target(o: &Options) -> String {
 
 /// The preview plugins of `~/.config/lvim-plugins` (or `$LVIM_PLUGIN_ROOTS`, `:`-separated), set up with lfz's own
 /// `[plugins.<name>]` overrides. None when no plugin previews anything.
+/// `LVIM_FUZZY_KEEP_SCREEN` set (by lvim-fuzzy-commander, which runs the finder from its own full-screen view): draw in the
+/// screen the program was started in — do not enter the alternate screen and do not leave it. A program that is
+/// already in the alternate screen would otherwise show the shell for a moment on the way in and out.
+fn keeps_screen() -> bool {
+    std::env::var_os("LVIM_FUZZY_KEEP_SCREEN").is_some_and(|v| !v.is_empty())
+}
+
 fn preview_plugins(wake: std::sync::mpsc::Sender<()>) -> Option<lvim_fuzzy_plugin::Previewer> {
     let own = crate::PLUGINS.get().cloned().unwrap_or_default();
     let p = crate::plugin_host("lvim-fuzzy-cli", &own, wake);

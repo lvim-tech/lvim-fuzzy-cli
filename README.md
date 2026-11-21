@@ -326,6 +326,12 @@ Neovim picker (lvim-picker) turns its preview through the same places with `<C-n
 `<C-e>`. A preview put at the bottom with `--preview-window=down` is off the cycle: forward from it hides it, back
 goes up.
 
+### Run from another full-screen program
+
+With `LVIM_FUZZY_KEEP_SCREEN=1` lfz draws in the screen it was started in and neither enters nor leaves the alternate
+screen. lvim-fuzzy-commander sets it when it runs the finder (`Ctrl-c f` / `Ctrl-c g`): the shell never shows on the way
+in or out (nothing flashes), and the icons it sent to the screen stay.
+
 ### Opening a file
 
 Enter on a file opens it the way lvim-fuzzy-commander and the Neovim picker (lvim-fuzzy-picker) do — one rule, the
