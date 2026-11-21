@@ -59,6 +59,9 @@
 # nvim         = "nvim"                       # the Neovim of the preview
 # nvim_appname = "nvim-preview"               # its NVIM_APPNAME (a lighter config)
 
+# [pool]                        # `lvim-fuzzy pool` keeps a warm Neovim for the preview
+# enabled = true                # take it when one runs (false: always start one)
+
 # [previewers.bat]              # your own preview: bat, glow, eza --tree, ...
 # command    = "bat --color=always --style=numbers --highlight-line {line} {file}"
 # for        = "file"           # file | dir | any

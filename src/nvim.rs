@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::io::{BufReader, BufWriter, Write};
-use std::process::{Child, ChildStdin, Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -32,7 +32,16 @@ pub struct Grid {
     pub default_bg: Option<Color>,
     /// Bumped on every `flush`.
     pub frame: u64,
+    /// Drawn: the first target has been opened and painted. Until then the
+    /// finder keeps its "starting" note — the instance's own empty or start
+    /// screen never flashes in the preview.
     pub ready: bool,
+    /// The first open has been answered (its paint is the next flush).
+    opened: bool,
+    /// The target (`path`, or the text for a non-file) whose open was answered
+    /// last — what the grid shows: until it is the finder's current item, the
+    /// finder shows its own instant file preview instead.
+    pub shown: Option<String>,
     pub exited: bool,
 }
 
@@ -69,9 +78,19 @@ impl Grid {
     }
 }
 
+/// Where requests go: the embedded Neovim's stdin, or a pooled instance's socket.
+type Writer = Arc<Mutex<BufWriter<Box<dyn Write + Send>>>>;
+
 pub struct Nvim {
-    child: Child,
-    writer: Arc<Mutex<BufWriter<ChildStdin>>>,
+    /// The embedded Neovim (`--embed`); None for an instance lent by the pool.
+    child: Option<Child>,
+    /// The pool's lease on the instance (given back when dropped), and the socket
+    /// to shut down so the reader thread ends.
+    lease: Option<(crate::pool::Lease, std::os::unix::net::UnixStream)>,
+    writer: Writer,
+    /// When the instance was started or taken (the finder shows "starting" only
+    /// when it takes noticeably long).
+    pub started: std::time::Instant,
     next_id: Arc<Mutex<u64>>,
     /// One preview open at a time: the request in flight, and only the
     /// latest one waiting (a key held down must not queue every file it
@@ -85,11 +104,14 @@ pub struct Nvim {
 struct Opens {
     in_flight: Option<u64>,
     waiting: Option<Value>,
+    /// The targets of the open in flight and of the waiting one.
+    in_flight_tag: Option<String>,
+    waiting_tag: Option<String>,
 }
 
 /// Write one request (`[0, id, method, params]`); returns its id.
 fn write_request(
-    writer: &Mutex<BufWriter<ChildStdin>>,
+    writer: &Mutex<BufWriter<Box<dyn Write + Send>>>,
     next_id: &Mutex<u64>,
     method: &str,
     params: Value,
@@ -118,13 +140,45 @@ fn rgb(v: &Value) -> Option<Color> {
     })
 }
 
+/// The preview's Neovim is not the pane's Neovim: it draws in no terminal of its own. Inheriting the
+/// multiplexer's variables made plugins that mark "Neovim runs in this pane" (lvim-winnav) label the
+/// FINDER's pane as Neovim — the pane-nav keys were then sent into it instead of moving the pane, and
+/// the mark stayed after the finder (which ends this Neovim without a quit) had gone.
+pub fn no_pane_env(cmd: &mut Command) {
+    for v in ["ZELLIJ", "ZELLIJ_PANE_ID", "ZELLIJ_SESSION_NAME", "TMUX", "TMUX_PANE"] {
+        cmd.env_remove(v);
+    }
+}
+
 fn s(v: &str) -> Value {
     Value::from(v)
 }
 
 impl Nvim {
-    /// Start `nvim --embed`. `program` may carry arguments ("nvim -u NONE").
-    pub fn start(program: &str, appname: Option<&str>, wake: Sender<()>) -> std::io::Result<Nvim> {
+    /// The preview's Neovim: a warm instance from the pool (`lvim-fuzzy pool`) when
+    /// `pool` is on and one is free, else `nvim --embed`. `program` may carry
+    /// arguments ("nvim -u NONE").
+    pub fn start(program: &str, appname: Option<&str>, pool: bool, wake: Sender<()>) -> std::io::Result<Nvim> {
+        if pool
+            && let Some(lease) = crate::pool::take(program, appname)
+            && let Ok(stream) = std::os::unix::net::UnixStream::connect(&lease.socket)
+            && let (Ok(reader), Ok(shut)) = (stream.try_clone(), stream.try_clone())
+        {
+            let n = Self::with_io(None, Box::new(stream), Box::new(reader), wake);
+            // the instance started in the pool's directory: relative paths are this finder's
+            if let Ok(cwd) = std::env::current_dir() {
+                n.send("nvim_set_current_dir", vec![s(&cwd.to_string_lossy())]);
+            }
+            return Ok(Nvim {
+                lease: Some((lease, shut)),
+                ..n
+            });
+        }
+        Self::embed(program, appname, wake)
+    }
+
+    /// Start `nvim --embed`.
+    fn embed(program: &str, appname: Option<&str>, wake: Sender<()>) -> std::io::Result<Nvim> {
         let words = crate::options::shell_words(program).unwrap_or_else(|_| vec!["nvim".into()]);
         let (prog, args) = words
             .split_first()
@@ -149,17 +203,28 @@ impl Nvim {
         if let Some(a) = appname {
             cmd.env("NVIM_APPNAME", a);
         }
+        crate::nvim::no_pane_env(&mut cmd);
         let mut child = cmd.spawn()?;
         let stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
+        Ok(Self::with_io(Some(child), Box::new(stdin), Box::new(stdout), wake))
+    }
+
+    /// The client over any transport: requests to `w`, redraws and answers from `r`.
+    fn with_io(
+        child: Option<Child>,
+        w: Box<dyn Write + Send>,
+        r: Box<dyn std::io::Read + Send>,
+        wake: Sender<()>,
+    ) -> Nvim {
         let grid = Arc::new(Mutex::new(Grid::default()));
         let g = grid.clone();
-        let writer = Arc::new(Mutex::new(BufWriter::new(stdin)));
+        let writer: Writer = Arc::new(Mutex::new(BufWriter::new(w)));
         let next_id = Arc::new(Mutex::new(1u64));
         let opens: Arc<Mutex<Opens>> = Arc::new(Mutex::new(Opens::default()));
         let (w2, n2, o2) = (writer.clone(), next_id.clone(), opens.clone());
         thread::spawn(move || {
-            let mut r = BufReader::new(stdout);
+            let mut r = BufReader::new(r);
             while let Ok(msg) = rmpv::decode::read_value(&mut r) {
                 // a response ([1, id, error, result]) to the open in flight:
                 // the waiting one (the latest target) goes next
@@ -168,6 +233,14 @@ impl Nvim {
                 {
                     let id = arr.get(1).and_then(Value::as_u64);
                     let mut o = o2.lock().unwrap();
+                    if id.is_some() && o.in_flight == id {
+                        // the open paints before it answers (`redraw` in it): the grid shows it now
+                        let mut gl = g.lock().unwrap();
+                        gl.opened = true;
+                        gl.shown = o.in_flight_tag.take();
+                        drop(gl);
+                        o.in_flight_tag = o.waiting_tag.take();
+                    }
                     if id.is_some() && o.in_flight == id {
                         o.in_flight = o
                             .waiting
@@ -181,14 +254,16 @@ impl Nvim {
             g.lock().unwrap().exited = true;
             let _ = wake.send(());
         });
-        Ok(Nvim {
+        Nvim {
             child,
+            lease: None,
             writer,
+            started: std::time::Instant::now(),
             next_id,
             opens,
             grid,
             attached: (0, 0),
-        })
+        }
     }
 
     fn send(&self, method: &str, params: Vec<Value>) {
@@ -231,6 +306,9 @@ local path, line, col, text, query = ...
 local ok, pv = pcall(require, "lvim-fuzzy.preview")
 if ok and type(pv) == "table" and pv.show then
   pv.show({ path = path, line = line, col = col, text = text, query = query })
+  -- paint now: Neovim redraws only when it is idle, and a held key sends the next
+  -- open the moment this one is answered — it was never idle, the preview froze
+  pcall(vim.cmd, "redraw")
   return
 end
 local prev = vim.api.nvim_get_current_buf()
@@ -257,6 +335,7 @@ if line > 0 then
 else
   pcall(vim.api.nvim_win_set_cursor, 0, { 1, 0 })
 end
+pcall(vim.cmd, "redraw")
 "#;
         let params = Value::Array(vec![
             s(CODE),
@@ -269,10 +348,13 @@ end
             ]),
         ]);
         // one open at a time; meanwhile only the latest target waits
+        let tag = if path.is_empty() { text.to_string() } else { path.to_string() };
         let mut o = self.opens.lock().unwrap();
         if o.in_flight.is_some() {
             o.waiting = Some(params);
+            o.waiting_tag = Some(tag);
         } else {
+            o.in_flight_tag = Some(tag);
             o.in_flight = Some(write_request(
                 &self.writer,
                 &self.next_id,
@@ -302,9 +384,17 @@ end
     }
 
     pub fn quit(mut self) {
-        self.send("nvim_command", vec![s("qa!")]);
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        if let Some(mut child) = self.child.take() {
+            self.send("nvim_command", vec![s("qa!")]);
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        // a pooled instance: detach and give it back (the pool cleans or ends it)
+        if let Some((lease, sock)) = self.lease.take() {
+            self.send("nvim_ui_detach", vec![]);
+            let _ = sock.shutdown(std::net::Shutdown::Both);
+            drop(lease);
+        }
     }
 }
 
@@ -439,7 +529,7 @@ fn handle(msg: &Value, grid: &Arc<Mutex<Grid>>, wake: &Sender<()>) {
     }
     if flushed {
         g.frame += 1;
-        g.ready = true;
+        g.ready = g.opened;
         drop(g);
         let _ = wake.send(());
     }
@@ -530,7 +620,7 @@ mod tests {
     #[ignore]
     fn embedded_nvim_renders_a_file() {
         let (tx, rx) = std::sync::mpsc::channel();
-        let mut n = Nvim::start("nvim -u NONE", None, tx).unwrap();
+        let mut n = Nvim::start("nvim -u NONE", None, false, tx).unwrap();
         n.size(60, 8);
         n.open("Cargo.toml", 2, 1, "", "");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);

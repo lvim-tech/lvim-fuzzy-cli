@@ -18,6 +18,7 @@ mod modes;
 mod nvim;
 mod options;
 mod placeholder;
+mod pool;
 mod popup;
 mod preview;
 mod previewers;
@@ -403,6 +404,35 @@ fn real_main(argv_in: &[String]) -> Result<i32, String> {
                         return Err(format!("unknown config command: {other} (check, path)"));
                     }
                 });
+            }
+            "pool" => {
+                return match rest.first().map(String::as_str) {
+                    // run the pool (in the foreground: a service or `&` puts it in the background)
+                    None => {
+                        let o = options::Options::parse(&cfg.args)?;
+                        pool::serve(&o.nvim, o.nvim_appname.as_deref(), cfg.path.as_deref())
+                    }
+                    Some(cmd @ ("status" | "reload" | "stop")) => match pool::request(cmd) {
+                        Some(out) => {
+                            if cmd == "status" {
+                                println!("{}", pool::dir().display());
+                                if out.is_empty() {
+                                    println!("  (no instances)");
+                                }
+                                for l in out.lines() {
+                                    let f: Vec<&str> = l.split('\t').collect();
+                                    println!("  #{} {}", f.first().unwrap_or(&""), f.get(1).unwrap_or(&""));
+                                }
+                            }
+                            Ok(0)
+                        }
+                        None => {
+                            eprintln!("lvim-fuzzy: no pool runs ({})", pool::dir().display());
+                            Ok(1)
+                        }
+                    },
+                    Some(other) => Err(format!("unknown pool command: {other} (status, reload, stop)")),
+                };
             }
             "mode" | "modes" => {
                 let exe = placeholder::quote(&self_exe());

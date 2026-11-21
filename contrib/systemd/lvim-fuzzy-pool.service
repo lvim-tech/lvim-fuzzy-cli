@@ -1,0 +1,20 @@
+# lvim-fuzzy pool: keeps one warm Neovim for the finder's preview.
+#
+#   cp contrib/systemd/lvim-fuzzy-pool.service ~/.config/systemd/user/
+#   systemctl --user enable --now lvim-fuzzy-pool
+#
+# A user service does not get your shell's PATH: if `nvim` (or the `nvim` of
+# `[preview]`) lives elsewhere, add its directory below, or override with
+# `systemctl --user edit lvim-fuzzy-pool`.
+
+[Unit]
+Description=lvim-fuzzy: a warm Neovim for the finder's preview
+
+[Service]
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/lvim-fuzzy pool
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -82,6 +82,9 @@ pub struct Walker {
     pub dir: bool,
     pub follow: bool,
     pub hidden: bool,
+    /// Walk a directory again under every path that reaches it (as fzf does);
+    /// by default each directory is walked once.
+    pub dup: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -180,6 +183,8 @@ pub struct Options {
     pub bar: String,
     pub nvim: String,
     pub nvim_appname: Option<String>,
+    /// Take the preview's Neovim from a running `lvim-fuzzy pool` (--no-pool: always start one).
+    pub pool: bool,
     /// The editor of the `open` action (--editor / `editor` in the config).
     pub editor: Option<String>,
     /// What the `open` action does (--open; a mode's `open`).
@@ -289,6 +294,7 @@ impl Default for Options {
             bar: "bottom".into(),
             nvim: "nvim".into(),
             nvim_appname: None,
+            pool: true,
             editor: None,
             open: None,
             typos: 0,
@@ -308,6 +314,7 @@ impl Default for Options {
                 dir: false,
                 follow: true,
                 hidden: true,
+                dup: false,
             },
             walker_root: vec![".".into()],
             walker_skip: vec![".git".into(), "node_modules".into()],
@@ -510,7 +517,7 @@ const SPECS: &[Spec] = &[
     // preview
     req!("preview"), req!("preview-window"), req!("preview-wrap-sign"),
     // lvim-fuzzy: a real Neovim as the preview
-    opt!("preview-nvim", never), req!("nvim"), req!("nvim-appname"),
+    opt!("preview-nvim", never), req!("nvim"), req!("nvim-appname"), spec!("pool"),
     // lvim-fuzzy: the lvim look
     req!("preview-order"), req!("scope"), req!("command"), req!("target"), req!("mode-name"), req!("config"), req!("theme"), req!("title"), req!("title-pos"), req!("bar"),
     // header / footer
@@ -1060,6 +1067,7 @@ impl Options {
             }
             "nvim" => self.nvim = val().to_string(),
             "nvim-appname" => self.nvim_appname = if neg { None } else { Some(val().to_string()) },
+            "pool" => self.pool = !neg,
             "editor" => self.editor = if neg { None } else { Some(val().to_string()) },
             "exact-window" => {
                 let v = val();
@@ -1230,6 +1238,7 @@ impl Options {
                     dir: false,
                     follow: false,
                     hidden: false,
+                    dup: false,
                 };
                 for p in val().split(',') {
                     match p {
@@ -1237,6 +1246,7 @@ impl Options {
                         "dir" => w.dir = true,
                         "follow" => w.follow = true,
                         "hidden" => w.hidden = true,
+                        "dup" => w.dup = true,
                         _ => return Err(format!("invalid walker option: {p}")),
                     }
                 }

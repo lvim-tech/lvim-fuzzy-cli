@@ -182,8 +182,41 @@ with its file and line. A user mode may not take a built-in mode's name.
 `lvim-fuzzy doctor` lists every problem at once: the config (with file and
 line), the themes directory and each theme file (missing roles included), the
 theme a start would use, the themer target, modes and previewers whose programs
-are missing, Neovim and its `lvim-fuzzy.preview` module, the usual programs
+are missing, Neovim and its `lvim-fuzzy.preview` module, the pool, the usual programs
 (rg, fd, git, bat) and the terminal (TERM, truecolor). It exits 1 on an error.
+
+## Warm preview (pool)
+
+The Neovim preview starts Neovim with your config, which costs a few hundred
+milliseconds before the first file shows (the deferred plugins, the
+colorscheme, treesitter). `lvim-fuzzy pool` keeps one Neovim started and warmed
+for the next finder, which attaches to it instead of starting its own:
+
+- there is always one free instance; a finder takes it and the pool starts
+  warming the next one;
+- when the finder closes, its instance is ended — a used instance is never
+  given back, the free one is always fresh;
+- a finder that finds no free instance (no pool running, or one still warming)
+  starts its own Neovim as before: the pool only makes the preview faster.
+
+Warming means attaching a UI for a moment, so the deferred plugins load before
+any finder needs them. The pool restarts its idle instances when your Neovim
+config or this config changes (hidden state directories aside), or on
+`lvim-fuzzy pool reload`.
+
+```sh
+lvim-fuzzy pool            # run it (foreground)
+lvim-fuzzy pool status     # its instances: free / warming / taken
+lvim-fuzzy pool reload     # restart the idle instances
+lvim-fuzzy pool stop
+```
+
+To start it at login, a systemd user service is in
+`contrib/systemd/lvim-fuzzy-pool.service` (instructions inside); without
+systemd, `lvim-fuzzy pool >/dev/null 2>&1 &!` in `.zprofile` does the same.
+The sockets live in `$XDG_RUNTIME_DIR/lvim-fuzzy` (`LVIM_FUZZY_POOL_DIR`
+overrides). `[pool] enabled = false` or `--no-pool` makes a finder ignore it;
+`lvim-fuzzy doctor` reports its state.
 
 ## Compatibility and speed
 
@@ -201,6 +234,16 @@ times `--filter` on a generated list of paths; on 1 000 000 lines:
 | `pickerfuzzyengine` | 122 ms | 54 ms |
 | `src lua !md` (`--no-sort`) | 969 ms | 61 ms |
 | `zzzz` | 148 ms | 58 ms |
+
+Without a source (no stdin, no default command) the finder walks the current
+directory itself, as fzf does — in parallel, on several threads, like fzf's
+walker. One difference by design: a directory reached through several paths
+(symlinks) is listed ONCE, always under the same path — its real path when the
+walk reaches it anyway, else the first symlink to it in path order. fzf lists it
+again under every path (a home directory with flatpak and mise links: 3.2 M
+entries in fzf, 2.8 M here). `--walker=file,follow,hidden,dup` walks every path,
+as fzf, with the same count. On that home directory (cache warm): fzf 3.7–5.2 s,
+lvim-fuzzy 0.8–0.9 s (`dup`: ~1.1 s).
 
 `--typos=N` (1 or 2) lets a fuzzy term miss that many of its characters
 (`--typos=auto`: none up to 4 characters, 1 up to 8, 2 beyond); an exact match

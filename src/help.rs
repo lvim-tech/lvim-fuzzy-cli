@@ -59,6 +59,7 @@ PREVIEW
       --target=T *        The item's file[:line[:col]] for the Neovim / file preview
       --preview-order=L * nvim,file,command and [previewers.*] from the config
       --nvim=PROG *, --nvim-appname=NAME *
+      --no-pool *         Always start the preview's Neovim (not one from `lvim-fuzzy pool`)
 
 HEADER
       --header=STR, --header-lines=N
@@ -69,6 +70,8 @@ SCRIPTING
       --history=FILE, --history-size=N
       --listen[=[ADDR:]PORT|SOCKET], --listen-unsafe     (LVIM_FUZZY_API_KEY)
       --with-shell=STR, --walker=OPTS, --walker-root=DIR, --walker-skip=DIRS
+                          --walker: file,dir,follow,hidden (fzf's) and dup * (walk a
+                          directory again under every path to it, as fzf)
 
 SHELL INTEGRATION
       --zsh, --bash, --fish   Print the script; keys come from [shell] in the config

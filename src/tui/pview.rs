@@ -47,7 +47,7 @@ impl App {
             return true;
         }
         let appname = self.opts.nvim_appname.clone();
-        match crate::nvim::Nvim::start(&self.opts.nvim, appname.as_deref(), self.pv.wake.clone()) {
+        match crate::nvim::Nvim::start(&self.opts.nvim, appname.as_deref(), self.opts.pool, self.pv.wake.clone()) {
             Ok(n) => {
                 self.pv.nvim = Some(n);
                 true
@@ -102,6 +102,13 @@ impl App {
         let query = self.highlight_query();
         if let Some(n) = &self.pv.nvim {
             n.open(&path, line, col, &text, &query);
+        }
+        // the instant file preview, shown until Neovim has painted this item
+        if !path.is_empty() {
+            if self.pv.file_target.as_ref().map(|t| &t.0) != Some(&path) {
+                self.pv.offset = usize::MAX;
+            }
+            self.pv.file_target = Some((path.clone(), line, col));
         }
         self.pv.label = if std::path::Path::new(&path).exists() {
             path.clone()
@@ -304,11 +311,20 @@ impl App {
         }
     }
 
+    /// Whether the Neovim grid shows the current item (its open has been painted).
+    fn nvim_caught_up(&self) -> bool {
+        let (Some(n), Some((path, _, _))) = (self.pv.nvim.as_ref(), self.pv.file_target.as_ref()) else {
+            return true; // nothing to compare (a non-file target): Neovim as before
+        };
+        n.grid.lock().unwrap().shown.as_deref() == Some(path.as_str())
+    }
+
     fn draw_nvim(&mut self, cv: &mut Canvas, inner: Rect) {
         let Some(n) = self.pv.nvim.as_mut() else {
             return;
         };
         n.size(inner.w as usize, inner.h as usize);
+        let slow = n.started.elapsed() > std::time::Duration::from_millis(300);
         let g = n.grid.lock().unwrap();
         if g.exited {
             drop(g);
@@ -318,6 +334,11 @@ impl App {
             return;
         }
         if !g.ready {
+            // a warm instance paints within tens of ms: an empty pane until then, the note only when
+            // Neovim is slow (a cold start) — a note shown for a frame read as a flicker
+            if !slow {
+                return;
+            }
             let msg = format!("{} starting Neovim…", SPINNER[self.spinner]);
             cv.put(
                 inner.x + 1,
@@ -465,10 +486,13 @@ impl App {
                 items.get(i as usize).map(|it| it.raw().to_string())
             })
             .unwrap_or_default();
+        // the typed query (the command placeholders) AND the one the matches belong to (what the
+        // preview marks): the second lags the first while results come in, and keyed on the typed one
+        // alone the preview kept the marks of the previous keystroke ("lvim" typed, "lvi" marked)
         let key = (
             self.current_index(),
             text,
-            self.query_string(),
+            format!("{}\u{1}{}", self.query_string(), self.highlight_query()),
             self.selected.len(),
         );
         if !self.pv.force && self.pv.key.as_ref() == Some(&key) {
@@ -640,6 +664,17 @@ impl App {
         }
         self.pv.inner = Some(inner);
         if self.nvim_mode() {
+            // Neovim still on an earlier item (keys held down, a slow file type, a cold start):
+            // the built-in preview shows the current file at once, as fzf + bat would; Neovim
+            // takes over the moment it has painted this item. Not while the preview has focus.
+            if !self.pv.focus && !self.nvim_caught_up() {
+                // keep Neovim attached at the pane's size, so its frame is ready to take over
+                if let Some(n) = self.pv.nvim.as_mut() {
+                    n.size(inner.w as usize, inner.h as usize);
+                }
+                self.draw_file(cv, inner);
+                return;
+            }
             self.draw_nvim(cv, inner);
             return;
         }
@@ -648,6 +683,14 @@ impl App {
             return;
         }
         if self.pv.active.is_none() && self.pv.oneoff.is_none() {
+            // "Nothing to preview" only for a current item no provider can show — never while there is
+            // no current item (the items or the first matches still coming; with no matches the list
+            // says so), and never for an item whose preview is chosen right after this frame (the draw
+            // runs before the choice): each of those showed the note for a moment, read as a flicker
+            let decided = self.pv.key.as_ref().map(|k| k.0) == Some(self.current_index());
+            if self.current_index().is_none() || !decided {
+                return;
+            }
             let st = self
                 .look
                 .as_ref()

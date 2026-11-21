@@ -23,6 +23,9 @@
 //! nvim = "nvim"
 //! nvim_appname = "nvim-preview"
 //!
+//! [pool]                    # warm Neovim instances from `lvim-fuzzy pool`
+//! enabled = true
+//!
 //! [keys]
 //! "ctrl-o" = "execute(less {})"
 //!
@@ -441,13 +444,27 @@ pub fn load(explicit: Option<&str>) -> Result<Config, Vec<String>> {
             "icons" => look_icons(v, "icons", &mut args, &mut errs, &at),
             "show" => look_show(v, "show", &mut args, &mut errs, &at),
             "previewers" => {} // read above
+            "pool" => match v.as_table() {
+                None => errs.push(format!("{}: [pool] must be a table", at("pool"))),
+                Some(t) => {
+                    for (pk, pv) in t {
+                        match pk.as_str() {
+                            "enabled" => match pv.as_bool() {
+                                Some(on) => args.push(if on { "--pool" } else { "--no-pool" }.to_string()),
+                                None => errs.push(format!("{}: pool.enabled must be true or false", at("enabled"))),
+                            },
+                            other => errs.push(format!("{}: unknown key `pool.{other}` (enabled)", at(other))),
+                        }
+                    }
+                }
+            },
             "shell" => {
                 let (c, e) = crate::shell::parse(v, &|k: &str| at(k));
                 shell_cfg = c;
                 errs.extend(e);
             }
             other => errs.push(format!(
-                "{}: unknown key `{other}` (theme, editor, shell, bar, title_pos, options, popup, text, icons, preview, previewers, keys, modes)",
+                "{}: unknown key `{other}` (theme, editor, shell, bar, title_pos, options, popup, text, icons, preview, pool, previewers, keys, modes)",
                 at(other)
             )),
         }

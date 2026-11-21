@@ -225,6 +225,24 @@ pub fn run(explicit: Option<&str>) -> i32 {
         }
         None => r.info("Neovim is not installed — the built-in file preview is used"),
     }
+    if nvim.is_some() {
+        match crate::pool::request("status") {
+            Some(out) => {
+                let free = out.lines().filter(|l| l.contains("\tfree\t")).count();
+                let warming = out.lines().filter(|l| l.contains("\twarming\t")).count();
+                let taken = out.lines().filter(|l| l.contains("\ttaken\t")).count();
+                if free + warming > 0 {
+                    r.ok(format!(
+                        "pool: {free} free, {warming} warming, {taken} in use ({})",
+                        crate::pool::dir().display()
+                    ));
+                } else {
+                    r.warn("pool: runs but has no free instance (Neovim fails to warm up? see its log)");
+                }
+            }
+            None => r.info("pool: not running — each finder starts its own Neovim (`lvim-fuzzy pool`, see the README)"),
+        }
+    }
     for p in &previewers {
         let missing: Vec<&String> = p.requires.iter().filter(|x| !modes::on_path(x)).collect();
         if missing.is_empty() {
