@@ -499,7 +499,7 @@ pub fn load(explicit: Option<&str>) -> Result<Config, Vec<String>> {
             || modes::builtin().iter().any(|m| m.name == b.mode)
             || modes_out.iter().any(|m| m.name == b.mode);
         if !known {
-            errs.push(format!("{}: shell.keys.\"{}\": unknown mode `{}` (`lvim-fuzzy mode` lists them; or shell-history)", at(&b.key), b.key, b.mode));
+            errs.push(format!("{}: shell.keys.\"{}\": unknown mode `{}` (`lvim-fuzzy-cli mode` lists them; or shell-history)", at(&b.key), b.key, b.mode));
         }
     }
     errs.splice(0..0, pre_errs);

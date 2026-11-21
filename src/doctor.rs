@@ -57,7 +57,7 @@ fn expected_roles() -> Vec<String> {
 pub fn run(explicit: Option<&str>) -> i32 {
     let mut r = Report::default();
     println!(
-        "lvim-fuzzy doctor — {} ({})",
+        "lvim-fuzzy-cli doctor — {} ({})",
         env!("CARGO_PKG_VERSION"),
         crate::self_exe()
     );
@@ -169,11 +169,11 @@ pub fn run(explicit: Option<&str>) -> i32 {
         r.info("themer is not installed — themes are managed by hand");
     } else if target.is_file() {
         r.ok(format!(
-            "themer switches lvim-fuzzy's theme ({})",
+            "themer switches lvim-fuzzy-cli's theme ({})",
             target.display()
         ));
     } else {
-        r.warn(format!("themer is installed but has no lvim-fuzzy target ({}) — its theme switches skip lvim-fuzzy", target.display()));
+        r.warn(format!("themer is installed but has no lvim-fuzzy-cli target ({}) — its theme switches skip lvim-fuzzy-cli", target.display()));
     }
 
     // ── modes ───────────────────────────────────────────────────────────────
@@ -213,14 +213,14 @@ pub fn run(explicit: Option<&str>) -> i32 {
                     "--cmd",
                     "let g:lvim_fuzzy_preview = 1",
                     "-c",
-                    "lua io.stdout:write(pcall(require, 'lvim-fuzzy.preview') and 'yes' or 'no')",
+                    "lua io.stdout:write(pcall(require, 'lvim-fuzzy-cli.preview') and 'yes' or 'no')",
                     "-c",
                     "qa!",
                 ],
             );
             match probe.as_deref() {
-                Some(s) if s.ends_with("yes") => r.ok("lvim-fuzzy.preview is available: the Neovim preview marks the query"),
-                _ => r.warn("lvim-fuzzy.preview is not loaded in Neovim: the preview opens files but does not mark the query (install the lvim-fuzzy plugin)"),
+                Some(s) if s.ends_with("yes") => r.ok("lvim-fuzzy-cli.preview is available: the Neovim preview marks the query"),
+                _ => r.warn("lvim-fuzzy-cli.preview is not loaded in Neovim: the preview opens files but does not mark the query (install the lvim-fuzzy-cli plugin)"),
             }
         }
         None => r.info("Neovim is not installed — the built-in file preview is used"),
@@ -240,7 +240,7 @@ pub fn run(explicit: Option<&str>) -> i32 {
                     r.warn("pool: runs but has no free instance (Neovim fails to warm up? see its log)");
                 }
             }
-            None => r.info("pool: not running — each finder starts its own Neovim (`lvim-fuzzy pool`, see the README)"),
+            None => r.info("pool: not running — each finder starts its own Neovim (`lvim-fuzzy-cli pool`, see the README)"),
         }
     }
     for p in &previewers {
@@ -263,7 +263,7 @@ pub fn run(explicit: Option<&str>) -> i32 {
     // ── shell keys ──────────────────────────────────────────────────────────
     r.section("Shell integration");
     if shell_cfg.binds.is_empty() && shell_cfg.completion.is_none() {
-        r.info("no [shell] keys set — `lvim-fuzzy --zsh` binds nothing");
+        r.info("no [shell] keys set — `lvim-fuzzy-cli --zsh` binds nothing");
     } else {
         for b in &shell_cfg.binds {
             let act = match b.act {

@@ -173,7 +173,7 @@ pub fn run(opts: &str, args: &[String]) -> Result<i32, String> {
                 "--close-on-exit",
                 "--block-until-exit",
                 "--name",
-                "lvim-fuzzy",
+                "lvim-fuzzy-cli",
             ])
             .args([
                 "--width", &g.width, "--height", &g.height, "--x", &x, "--y", &y, "--cwd", &cwd,

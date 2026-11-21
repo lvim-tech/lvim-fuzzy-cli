@@ -593,7 +593,7 @@ impl App {
                             if !asked {
                                 let (w, h) = self.pv.size;
                                 let (pw, ph) = lvim_fuzzy_ui::provided::wanted_px(Rect { x: 0, y: 0, w, h });
-                                let extra = serde_json::json!({"cols": w, "rows": h, "host": "lfz", "skip": skip, "max_px": [pw, ph]});
+                                let extra = serde_json::json!({"cols": w, "rows": h, "host": "lvim-fuzzy-cli", "skip": skip, "max_px": [pw, ph]});
                                 let ticket = self.pv.plug.as_mut().and_then(|pl| pl.request(&path, extra));
                                 match ticket {
                                     Some(t) => self.pv.plug_wait = Some((t, path.clone(), skip)),

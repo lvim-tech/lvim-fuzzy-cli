@@ -10,7 +10,7 @@ import os, random, statistics, subprocess, sys, tempfile, time
 
 lines = int(sys.argv[1]) if len(sys.argv) > 1 else 1_000_000
 here = os.path.dirname(os.path.abspath(__file__))
-progs = sys.argv[2:] or ["fzf", os.path.join(here, "..", "target", "release", "lvim-fuzzy")]
+progs = sys.argv[2:] or ["fzf", os.path.join(here, "..", "target", "release", "lvim-fuzzy-cli")]
 
 words = ["src", "lua", "lvim", "tui", "view", "core", "utils", "config", "test", "docs",
          "plugin", "init", "main", "model", "render", "cache", "theme", "picker", "fuzzy", "engine"]

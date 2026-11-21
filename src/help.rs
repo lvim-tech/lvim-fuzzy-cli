@@ -1,10 +1,10 @@
 //! `--help` and `--man`: one text, printed plainly or as a man page.
 
-pub const HELP: &str = r#"lvim-fuzzy - a fuzzy finder for the terminal, compatible with fzf,
+pub const HELP: &str = r#"lvim-fuzzy-cli - a fuzzy finder for the terminal, compatible with fzf,
 with lvim-picker's look
 
-Usage: lvim-fuzzy [MODE [QUERY...]] [options]
-       lvim-fuzzy mode | doctor | config [check|path]
+Usage: lvim-fuzzy-cli [MODE [QUERY...]] [options]
+       lvim-fuzzy-cli mode | doctor | config [check|path]
 
   It reads items from stdin (or runs a mode's source, or walks the current
   directory) and prints the chosen ones. fzf's options, keys and --bind actions
@@ -62,7 +62,7 @@ PREVIEW
       --icon-mode=auto|image|font *  Material images where the terminal takes them (default auto)
       --no-zellij-images *  this zellij does not take kitty placeholders
       --install-icons *   put the Material icons into ~/.local/share/lvim-icons/material (if newer)
-      --no-pool *         Always start the preview's Neovim (not one from `lvim-fuzzy pool`)
+      --no-pool *         Always start the preview's Neovim (not one from `lvim-fuzzy-cli pool`)
 
 HEADER
       --header=STR, --header-lines=N

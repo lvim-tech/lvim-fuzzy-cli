@@ -240,7 +240,7 @@ impl App {
         };
         let st = self.popup_style(None);
         let panel_bg = st.panel.bg;
-        let inner = self.popup_frame(cv, r, Some("Keys · lvim-fuzzy"), &st);
+        let inner = self.popup_frame(cv, r, Some("Keys · lvim-fuzzy-cli"), &st);
         if inner.h < 3 {
             return;
         }

@@ -43,7 +43,7 @@ fn main() {
     let code = match real_main(&argv) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("lvim-fuzzy: {e}");
+            eprintln!("lvim-fuzzy-cli: {e}");
             2
         }
     };
@@ -198,7 +198,7 @@ pub fn find_mode(name: &str) -> Option<&'static modes::Mode> {
 pub fn self_exe() -> String {
     std::env::current_exe()
         .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "lvim-fuzzy".into())
+        .unwrap_or_else(|_| "lvim-fuzzy-cli".into())
 }
 
 /// `--list-modes`: one `name<TAB>description` line per mode (for `lvim-fuzzy mode`).
@@ -284,7 +284,7 @@ fn describe_mode(name: &str) -> i32 {
     println!();
     println!("{}", m.description);
     println!();
-    println!("start:    lvim-fuzzy {}", m.name);
+    println!("start:    lvim-fuzzy-cli {}", m.name);
     match &m.command {
         Some(c) => println!("source:   {c}"),
         None => println!("source:   the built-in directory walker"),
@@ -362,9 +362,9 @@ fn real_main(argv_in: &[String]) -> Result<i32, String> {
         Ok(c) => c,
         Err(errs) => {
             for e in &errs {
-                eprintln!("lvim-fuzzy: {e}");
+                eprintln!("lvim-fuzzy-cli: {e}");
             }
-            eprintln!("lvim-fuzzy: {} problem(s) in the config", errs.len());
+            eprintln!("lvim-fuzzy-cli: {} problem(s) in the config", errs.len());
             return Ok(2);
         }
     };
@@ -463,7 +463,7 @@ fn real_main(argv_in: &[String]) -> Result<i32, String> {
                             Ok(0)
                         }
                         None => {
-                            eprintln!("lvim-fuzzy: no pool runs ({})", pool::dir().display());
+                            eprintln!("lvim-fuzzy-cli: no pool runs ({})", pool::dir().display());
                             Ok(1)
                         }
                     },
@@ -494,7 +494,7 @@ fn real_main(argv_in: &[String]) -> Result<i32, String> {
                 Some(m) => mode = Some(m),
                 None => {
                     return Err(format!(
-                        "unknown mode or subcommand: {name} (`lvim-fuzzy mode` lists the modes)"
+                        "unknown mode or subcommand: {name} (`lvim-fuzzy-cli mode` lists the modes)"
                     ));
                 }
             },
@@ -616,7 +616,7 @@ fn run_with(
         quiet_on_sigpipe();
     }
     if opts.version {
-        println!("{VERSION} (lvim-fuzzy)");
+        println!("{VERSION} (lvim-fuzzy-cli)");
         return Ok(0);
     }
     if opts.help {
@@ -1093,7 +1093,7 @@ fn preview_cmd(args: &[String]) -> i32 {
         return plugin_list_cmd("lvim-fuzzy-plugin-preview", &lvim_fuzzy_plugin_preview::BUILTIN_ENGINES, args);
     }
     if !args.iter().any(|a| a == "--plugin") {
-        eprintln!("usage: lvim-fuzzy preview --plugin [--plugins JSON] [--host NAME] [--size COLSxROWS] [--px WxH] [--skip N] -- PATH");
+        eprintln!("usage: lvim-fuzzy-cli preview --plugin [--plugins JSON] [--host NAME] [--size COLSxROWS] [--px WxH] [--skip N] -- PATH");
         return 2;
     }
     preview_plugin_cmd(args)
@@ -1102,9 +1102,9 @@ fn preview_cmd(args: &[String]) -> i32 {
 /// `lvim-fuzzy preview --plugin [--plugins JSON] [--host NAME] [--size COLSxROWS] -- PATH`: ask the preview plugins
 /// about a file and print their answer (a JSON array of instructions, `lvim_fuzzy_ui::provided`'s format; `[{"op":
 /// "pass"}]` when no plugin has anything). The Neovim picker is its client: `--plugins` is the picker's own
-/// `[plugins.<name>]` overrides as JSON, `--host picker` the tool the plugins see.
+/// `[plugins.<name>]` overrides as JSON, `--host lvim-fuzzy-picker` the tool the plugins see.
 fn preview_plugin_cmd(args: &[String]) -> i32 {
-    let (mut path, mut host, mut over, mut size) = (None, "picker".to_string(), serde_json::json!({}), (80u32, 24u32));
+    let (mut path, mut host, mut over, mut size) = (None, "lvim-fuzzy-picker".to_string(), serde_json::json!({}), (80u32, 24u32));
     let (mut px, mut skip) = ((1000u32, 800u32), 0u32);
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -1118,7 +1118,7 @@ fn preview_plugin_cmd(args: &[String]) -> i32 {
             "--plugins" => match it.next().map(|v| serde_json::from_str::<serde_json::Value>(v)) {
                 Some(Ok(v)) if v.is_object() => over = v,
                 _ => {
-                    eprintln!("lvim-fuzzy: preview --plugins takes a JSON object: {{\"<plugin>\": {{...}}}}");
+                    eprintln!("lvim-fuzzy-cli: preview --plugins takes a JSON object: {{\"<plugin>\": {{...}}}}");
                     return 2;
                 }
             },
@@ -1137,13 +1137,13 @@ fn preview_plugin_cmd(args: &[String]) -> i32 {
             "--skip" => skip = it.next().and_then(|v| v.parse().ok()).unwrap_or(0),
             p if !p.starts_with('-') && path.is_none() => path = Some(p.to_string()),
             o => {
-                eprintln!("lvim-fuzzy: preview --plugin: unknown option `{o}`");
+                eprintln!("lvim-fuzzy-cli: preview --plugin: unknown option `{o}`");
                 return 2;
             }
         }
     }
     let Some(path) = path else {
-        eprintln!("usage: lvim-fuzzy preview --plugin [--plugins JSON] [--host NAME] -- PATH");
+        eprintln!("usage: lvim-fuzzy-cli preview --plugin [--plugins JSON] [--host NAME] -- PATH");
         return 2;
     };
     let pass = || println!(r#"[{{"op":"pass"}}]"#);
@@ -1165,14 +1165,14 @@ fn preview_plugin_cmd(args: &[String]) -> i32 {
             match r.answer {
                 Ok(text) => println!("{text}"),
                 Err(e) => {
-                    eprintln!("lvim-fuzzy: {e}");
+                    eprintln!("lvim-fuzzy-cli: {e}");
                     pass();
                 }
             }
             break 0;
         }
         if std::time::Instant::now() > until {
-            eprintln!("lvim-fuzzy: the preview plugin did not answer in time");
+            eprintln!("lvim-fuzzy-cli: the preview plugin did not answer in time");
             pass();
             break 0;
         }
@@ -1191,7 +1191,7 @@ pub(crate) fn plugin_roots() -> Vec<std::path::PathBuf> {
     }
 }
 
-/// The plugin host of this program for `host` (`"lfz"`, `"picker"`): the plugins that ship inside it are installed
+/// The plugin host of this program for `host` (`"lvim-fuzzy-cli"`, `"lvim-fuzzy-picker"`): the plugins that ship inside it are installed
 /// first (whichever tool starts first writes them), then every plugin is loaded, configured with the shared override
 /// files and `own` (the tool's `[plugins.<name>]` tables).
 pub(crate) fn plugin_host(host: &str, own: &toml::Table, wake: std::sync::mpsc::Sender<()>) -> lvim_fuzzy_plugin::Previewer {
@@ -1215,7 +1215,7 @@ pub(crate) fn open_decision(pl: &mut lvim_fuzzy_plugin::Previewer, host: &str, p
 /// configured for this tool (the defaults, the shared override file, then lfz's own `[plugins.<name>]`, or the
 /// `--plugins` JSON of another tool), best group first, with a mark for a program that is not installed.
 fn plugin_list_cmd(plugin: &str, builtin: &[(&str, Option<&str>)], args: &[String]) -> i32 {
-    let (mut host, mut over) = ("lfz".to_string(), None);
+    let (mut host, mut over) = ("lvim-fuzzy-cli".to_string(), None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -1224,12 +1224,12 @@ fn plugin_list_cmd(plugin: &str, builtin: &[(&str, Option<&str>)], args: &[Strin
             "--plugins" => match it.next().map(|v| serde_json::from_str::<serde_json::Value>(v)) {
                 Some(Ok(v)) if v.is_object() => over = Some(v),
                 _ => {
-                    eprintln!("lvim-fuzzy: --plugins takes a JSON object: {{\"<plugin>\": {{...}}}}");
+                    eprintln!("lvim-fuzzy-cli: --plugins takes a JSON object: {{\"<plugin>\": {{...}}}}");
                     return 2;
                 }
             },
             o => {
-                eprintln!("lvim-fuzzy: --list: unknown option `{o}`");
+                eprintln!("lvim-fuzzy-cli: --list: unknown option `{o}`");
                 return 2;
             }
         }
@@ -1237,13 +1237,13 @@ fn plugin_list_cmd(plugin: &str, builtin: &[(&str, Option<&str>)], args: &[Strin
     // lfz's own layer unless another tool's is given
     let own: toml::Table = match over {
         Some(v) => toml::Value::try_from(&v).ok().and_then(|v| v.as_table().cloned()).unwrap_or_default(),
-        None if host == "lfz" => PLUGINS.get().cloned().unwrap_or_default(),
+        None if host == "lvim-fuzzy-cli" => PLUGINS.get().cloned().unwrap_or_default(),
         None => toml::Table::new(),
     };
     let (wake, _rx) = std::sync::mpsc::channel();
     let pl = plugin_host(&host, &own, wake);
     if pl.host().def(plugin).is_none() {
-        eprintln!("lvim-fuzzy: the plugin `{plugin}` is not installed for {host} (looked in {})", plugin_roots().iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", "));
+        eprintln!("lvim-fuzzy-cli: the plugin `{plugin}` is not installed for {host} (looked in {})", plugin_roots().iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", "));
         return 1;
     }
     println!("{plugin} — for {host}");
@@ -1256,7 +1256,7 @@ fn plugin_list_cmd(plugin: &str, builtin: &[(&str, Option<&str>)], args: &[Strin
 /// `{"action":"none"}` (no plugin has an answer) or `{"action":"missing","missing":["…"]}`. One rule — the plugin's
 /// configuration — for lvc, lfz and the picker.
 fn open_resolve_cmd(args: &[String]) -> i32 {
-    let (mut path, mut host, mut over) = (None, "picker".to_string(), serde_json::json!({}));
+    let (mut path, mut host, mut over) = (None, "lvim-fuzzy-picker".to_string(), serde_json::json!({}));
     let mut it = args.iter();
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -1269,19 +1269,19 @@ fn open_resolve_cmd(args: &[String]) -> i32 {
             "--plugins" => match it.next().map(|v| serde_json::from_str::<serde_json::Value>(v)) {
                 Some(Ok(v)) if v.is_object() => over = v,
                 _ => {
-                    eprintln!("lvim-fuzzy: open --plugins takes a JSON object: {{\"<plugin>\": {{...}}}}");
+                    eprintln!("lvim-fuzzy-cli: open --plugins takes a JSON object: {{\"<plugin>\": {{...}}}}");
                     return 2;
                 }
             },
             p if !p.starts_with('-') && path.is_none() => path = Some(p.to_string()),
             o => {
-                eprintln!("lvim-fuzzy: open --resolve: unknown option `{o}`");
+                eprintln!("lvim-fuzzy-cli: open --resolve: unknown option `{o}`");
                 return 2;
             }
         }
     }
     let Some(path) = path else {
-        eprintln!("usage: lvim-fuzzy open --resolve [--plugins JSON] [--host NAME] -- PATH");
+        eprintln!("usage: lvim-fuzzy-cli open --resolve [--plugins JSON] [--host NAME] -- PATH");
         return 2;
     };
     let own: toml::Table = toml::Value::try_from(&over).ok().and_then(|v| v.as_table().cloned()).unwrap_or_default();

@@ -1,4 +1,4 @@
-# lvim-fuzzy (lfz): every setting of the config, commented out.
+# lvim-fuzzy-cli (lfz): every setting of the config, commented out.
 #
 # The file: ~/.config/lvim-fuzzy/config.toml ($LVIM_FUZZY_CONFIG, --config PATH,
 # --no-config). Remove the `#` before a line to use it. The whole file is
@@ -15,7 +15,7 @@
 # title_pos = "left"            # the title: left | center | right
 # editor    = "nvim"            # what `open` (enter) starts: nvim | vim | hx | code | ...,
 #                               # or a template: "kak +{line} {file}"
-# options   = ["--cycle"]       # any lvim-fuzzy option
+# options   = ["--cycle"]       # any lvim-fuzzy-cli option
 
 # --- Texts --------------------------------------------------------------------
 
@@ -59,7 +59,7 @@
 # nvim         = "nvim"                       # the Neovim of the preview
 # nvim_appname = "nvim-preview"               # its NVIM_APPNAME (a lighter config)
 
-# [pool]                        # `lvim-fuzzy pool` keeps a warm Neovim for the preview
+# [pool]                        # `lvim-fuzzy-cli pool` keeps a warm Neovim for the preview
 # enabled = true                # take it when one runs (false: always start one)
 
 # [previewers.bat]              # your own preview: bat, glow, eza --tree, ...

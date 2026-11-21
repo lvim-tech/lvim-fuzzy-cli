@@ -274,7 +274,7 @@ __lvf_shell_history() {
 
 const FISH_BASE: &str = r#"
 function __lvf
-    set -l bin lvim-fuzzy
+    set -l bin lvim-fuzzy-cli
     set -q LVIM_FUZZY_BIN; and set bin $LVIM_FUZZY_BIN
     set -l height $__lvf_height
     set -q LVIM_FUZZY_HEIGHT; and set height $LVIM_FUZZY_HEIGHT
@@ -347,7 +347,7 @@ fn func_for(b: &Bind) -> (&'static str, Option<&str>) {
 
 fn header(shell: &str, cfg: &ShellCfg) -> String {
     let mut s =
-        format!("# lvim-fuzzy — {shell} integration, generated from the config's [shell].\n");
+        format!("# lvim-fuzzy-cli — {shell} integration, generated from the config's [shell].\n");
     if cfg.binds.is_empty() && cfg.completion.is_none() {
         s.push_str(
             "# No keys are set: add [shell.keys] to ~/.config/lvim-fuzzy/config.toml, e.g.\n",
@@ -387,7 +387,7 @@ _lvim_fuzzy() {
   if (( CURRENT == 2 )); then
     cmds=(${(f)"$("$bin" --complete-list commands 2>/dev/null)"})
     cmds=(${cmds//:/\:}); cmds=(${cmds/$'	'/:})
-    _describe -t commands 'lvim-fuzzy mode' cmds
+    _describe -t commands 'lvim-fuzzy-cli mode' cmds
     return
   fi
   if [[ $words[2] == config ]] && (( CURRENT == 3 )); then
@@ -397,7 +397,7 @@ _lvim_fuzzy() {
   _files
 }
 if (( $+functions[compdef] )); then
-  compdef _lvim_fuzzy lvim-fuzzy lfz
+  compdef _lvim_fuzzy lvim-fuzzy-cli lfz
 fi
 "#;
 
@@ -437,24 +437,24 @@ _lvim_fuzzy() {
   fi
   COMPREPLY=($(compgen -f -- "$cur"))
 }
-complete -o default -F _lvim_fuzzy lvim-fuzzy lfz
+complete -o default -F _lvim_fuzzy lvim-fuzzy-cli lfz
 "#;
 
 /// The fish completion: one `complete` line per option, values from
 /// `--complete-list values`.
 fn fish_command_completion() -> String {
     let mut s = String::from(
-        "\ncomplete -c lvim-fuzzy -c lfz -f\n\
-         complete -c lvim-fuzzy -c lfz -n __fish_is_first_arg -a '(lvim-fuzzy --complete-list commands)'\n\
-         complete -c lvim-fuzzy -c lfz -n '__fish_seen_subcommand_from config' -a 'check path'\n",
+        "\ncomplete -c lvim-fuzzy-cli -c lfz -f\n\
+         complete -c lvim-fuzzy-cli -c lfz -n __fish_is_first_arg -a '(lvim-fuzzy-cli --complete-list commands)'\n\
+         complete -c lvim-fuzzy-cli -c lfz -n '__fish_seen_subcommand_from config' -a 'check path'\n",
     );
     for o in crate::options::completion_options() {
         let name = o.trim_start_matches("--");
         match name.strip_suffix('=') {
             Some(n) => s.push_str(&format!(
-                "complete -c lvim-fuzzy -c lfz -l {n} -r -a '(lvim-fuzzy --complete-list values {n})'\n"
+                "complete -c lvim-fuzzy-cli -c lfz -l {n} -r -a '(lvim-fuzzy-cli --complete-list values {n})'\n"
             )),
-            None => s.push_str(&format!("complete -c lvim-fuzzy -c lfz -l {name}\n")),
+            None => s.push_str(&format!("complete -c lvim-fuzzy-cli -c lfz -l {name}\n")),
         }
     }
     s

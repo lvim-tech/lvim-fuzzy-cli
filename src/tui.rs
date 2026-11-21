@@ -341,6 +341,8 @@ impl Term {
             set_caret(&mut self.out, c)?;
         }
         self.out.flush()?;
+        // a program that ran full screen in between: kitty dropped an alternate screen's images, send them again
+        lvim_fuzzy_ui::iconimg::invalidate();
         self.prev = None;
         Ok(())
     }
@@ -530,7 +532,7 @@ fn preview_target(o: &Options) -> String {
 /// `[plugins.<name>]` overrides. None when no plugin previews anything.
 fn preview_plugins(wake: std::sync::mpsc::Sender<()>) -> Option<lvim_fuzzy_plugin::Previewer> {
     let own = crate::PLUGINS.get().cloned().unwrap_or_default();
-    let p = crate::plugin_host("lfz", &own, wake);
+    let p = crate::plugin_host("lvim-fuzzy-cli", &own, wake);
     (!p.is_empty()).then_some(p)
 }
 
@@ -1097,9 +1099,9 @@ impl App {
     fn open_decision(&mut self, path: &str) -> lvim_fuzzy_ui::open::Open {
         let opener = self.pv.opener.get_or_insert_with(|| {
             let (wake, _rx) = std::sync::mpsc::channel();
-            crate::plugin_host("lfz", &crate::PLUGINS.get().cloned().unwrap_or_default(), wake)
+            crate::plugin_host("lvim-fuzzy-cli", &crate::PLUGINS.get().cloned().unwrap_or_default(), wake)
         });
-        crate::open_decision(opener, "lfz", path)
+        crate::open_decision(opener, "lvim-fuzzy-cli", path)
     }
 
     fn toast(&mut self, text: String, error: bool) {

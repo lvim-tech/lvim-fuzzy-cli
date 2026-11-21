@@ -8,7 +8,7 @@ repository = "https://github.com/lvim-tech/lvim-fuzzy-cli"
 rust-version = "1.85"
 
 [[bin]]
-name = "lvim-fuzzy"
+name = "lvim-fuzzy-cli"
 path = "src/main.rs"
 
 [dependencies]

@@ -1,8 +1,8 @@
 # lvim-fuzzy-cli
 
-`lvim-fuzzy` is a fuzzy finder for the terminal, compatible with
+`lvim-fuzzy-cli` is a fuzzy finder for the terminal, compatible with
 [fzf](https://github.com/junegunn/fzf), built on the
-[lvim-fuzzy](https://github.com/lvim-tech/lvim-fuzzy-nvim) scoring model, with the
+[lvim-fuzzy-cli](https://github.com/lvim-tech/lvim-fuzzy-nvim) scoring model, with the
 look of lvim-picker — without needing Neovim.
 
 Status: early development.
@@ -26,15 +26,15 @@ Status: early development.
 - F1 shows the active keys, F2 the modes.
 - File icons as Material IMAGES where the terminal takes kitty placeholders (kitty, ghostty, zellij
   built with them), Nerd glyphs elsewhere: `[icons] mode = "auto" | "image" | "font"`. The set is shared
-  with lvim-icons and lvim-fuzzy-commander in `~/.local/share/lvim-icons/material`; `lvim-fuzzy --install-icons`
+  with lvim-icons and lvim-fuzzy-commander in `~/.local/share/lvim-icons/material`; `lvim-fuzzy-cli --install-icons`
   (run by `scripts/install.sh`) puts it there when it is missing or older.
 
 ## Shell integration
 
 ```sh
-eval "$(lvim-fuzzy --zsh)"      # ~/.zshrc
-eval "$(lvim-fuzzy --bash)"     # ~/.bashrc
-lvim-fuzzy --fish | source      # ~/.config/fish/config.fish
+eval "$(lvim-fuzzy-cli --zsh)"      # ~/.zshrc
+eval "$(lvim-fuzzy-cli --bash)"     # ~/.bashrc
+lvim-fuzzy-cli --fish | source      # ~/.config/fish/config.fish
 ```
 
 Nothing is bound by default: the keys come from the config's `[shell]`.
@@ -65,12 +65,12 @@ filter reads. Every mode starts as a subcommand; words after it are the
 starting query:
 
 ```sh
-lvim-fuzzy files
-lvim-fuzzy grep health          # live ripgrep, query "health"
-lvim-fuzzy grep-filter TODO     # grep once, then filter the results
-lvim-fuzzy git-log
-lvim-fuzzy mode                 # the list of every mode
-lvim-fuzzy --mode history       # the same, as an option
+lvim-fuzzy-cli files
+lvim-fuzzy-cli grep health          # live ripgrep, query "health"
+lvim-fuzzy-cli grep-filter TODO     # grep once, then filter the results
+lvim-fuzzy-cli git-log
+lvim-fuzzy-cli mode                 # the list of every mode
+lvim-fuzzy-cli --mode history       # the same, as an option
 ```
 
 Inside the finder, **F2** opens the mode menu: pick another mode and the finder
@@ -98,7 +98,7 @@ F5 theme.
 **Enter** opens the item in the editor (grep results at their line; `editor`
 in the config, `nvim` by default, `{file}` `{line}` `{col}` in a template);
 **ctrl-y** prints it. When the output goes to a program (the shell keys,
-`$(lvim-fuzzy)`, scripts) enter prints, as in fzf; an item that is not a file
+`$(lvim-fuzzy-cli)`, scripts) enter prints, as in fzf; an item that is not a file
 is printed too. A mode says what open means for its items with `open`: the
 built-in ones switch the tmux / Zellij session, show a commit, tag or stash,
 switch a branch, open a man page, connect with ssh, show a unit's status or a
@@ -135,7 +135,7 @@ it to the config.
 theme = "LvimNord_dark"
 bar = "bottom"              # the button bar: top | bottom
 title_pos = "left"          # left | center | right
-options = ["--cycle"]       # any lvim-fuzzy / fzf options
+options = ["--cycle"]       # any lvim-fuzzy-cli / fzf options
 
 # every popup (notifications, F1 help, F2 modes, F5 themes): the border in
 # Neovim's order: top-left, top, top-right, right, bottom-right, bottom,
@@ -160,7 +160,7 @@ requires = ["bat"]          # skipped when bat is missing
 "ctrl-o" = "execute(less {})"
 # "ctrl-l" = "open"         # open (enter by default) on another key as well
 
-[modes.todo]                # a user mode: in the F2 menu and `lvim-fuzzy todo`
+[modes.todo]                # a user mode: in the F2 menu and `lvim-fuzzy-cli todo`
 description = "TODO and FIXME comments"
 title = "TODO"
 command = "rg -n --no-heading 'TODO|FIXME'"
@@ -177,23 +177,23 @@ scope = "line"
 
 The config is checked before anything starts and every problem is reported,
 with its file and line. A user mode may not take a built-in mode's name.
-`lvim-fuzzy config check` only checks; `lvim-fuzzy config path` prints the path.
-`lvim-fuzzy --config-template` prints every setting, commented out (also in
+`lvim-fuzzy-cli config check` only checks; `lvim-fuzzy-cli config path` prints the path.
+`lvim-fuzzy-cli --config-template` prints every setting, commented out (also in
 `config.example.toml`); `[styles.<look>]` and `[show]` are described there.
 
 ## Doctor
 
-`lvim-fuzzy doctor` lists every problem at once: the config (with file and
+`lvim-fuzzy-cli doctor` lists every problem at once: the config (with file and
 line), the themes directory and each theme file (missing roles included), the
 theme a start would use, the themer target, modes and previewers whose programs
-are missing, Neovim and its `lvim-fuzzy.preview` module, the pool, the usual programs
+are missing, Neovim and its `lvim-fuzzy-cli.preview` module, the pool, the usual programs
 (rg, fd, git, bat) and the terminal (TERM, truecolor). It exits 1 on an error.
 
 ## Warm preview (pool)
 
 The Neovim preview starts Neovim with your config, which costs a few hundred
 milliseconds before the first file shows (the deferred plugins, the
-colorscheme, treesitter). `lvim-fuzzy pool` keeps one Neovim started and warmed
+colorscheme, treesitter). `lvim-fuzzy-cli pool` keeps one Neovim started and warmed
 for the next finder, which attaches to it instead of starting its own:
 
 - there is always one free instance; a finder takes it and the pool starts
@@ -206,30 +206,30 @@ for the next finder, which attaches to it instead of starting its own:
 Warming means attaching a UI for a moment, so the deferred plugins load before
 any finder needs them. The pool restarts its idle instances when your Neovim
 config or this config changes (hidden state directories aside), or on
-`lvim-fuzzy pool reload`.
+`lvim-fuzzy-cli pool reload`.
 
 ```sh
-lvim-fuzzy pool            # run it (foreground)
-lvim-fuzzy pool status     # its instances: free / warming / taken
-lvim-fuzzy pool reload     # restart the idle instances
-lvim-fuzzy pool stop
+lvim-fuzzy-cli pool            # run it (foreground)
+lvim-fuzzy-cli pool status     # its instances: free / warming / taken
+lvim-fuzzy-cli pool reload     # restart the idle instances
+lvim-fuzzy-cli pool stop
 ```
 
 To start it at login, a systemd user service is in
 `contrib/systemd/lvim-fuzzy-pool.service` (instructions inside); without
-systemd, `lvim-fuzzy pool >/dev/null 2>&1 &!` in `.zprofile` does the same.
+systemd, `lvim-fuzzy-cli pool >/dev/null 2>&1 &!` in `.zprofile` does the same.
 The sockets live in `$XDG_RUNTIME_DIR/lvim-fuzzy` (`LVIM_FUZZY_POOL_DIR`
 overrides). `[pool] enabled = false` or `--no-pool` makes a finder ignore it;
-`lvim-fuzzy doctor` reports its state.
+`lvim-fuzzy-cli doctor` reports its state.
 
 ## Compatibility and speed
 
 `cargo test --test compat` runs the same input, queries and options through
-`fzf --filter` and `lvim-fuzzy --filter` and compares the results (it is
+`fzf --filter` and `lvim-fuzzy-cli --filter` and compares the results (it is
 skipped when fzf is not installed). `bench/filter.py [LINES] [PROGRAM...]`
 times `--filter` on a generated list of paths; on 1 000 000 lines:
 
-| query | fzf 0.75 | lvim-fuzzy |
+| query | fzf 0.75 | lvim-fuzzy-cli |
 |---|---:|---:|
 | `lvim` | 469 ms | 76 ms |
 | `tuiview` | 169 ms | 60 ms |
@@ -247,14 +247,14 @@ walk reaches it anyway, else the first symlink to it in path order. fzf lists it
 again under every path (a home directory with flatpak and mise links: 3.2 M
 entries in fzf, 2.8 M here). `--walker=file,follow,hidden,dup` walks every path,
 as fzf, with the same count. On that home directory (cache warm): fzf 3.7–5.2 s,
-lvim-fuzzy 0.8–0.9 s (`dup`: ~1.1 s).
+lvim-fuzzy-cli 0.8–0.9 s (`dup`: ~1.1 s).
 
 `--typos=N` (1 or 2) lets a fuzzy term miss that many of its characters
 (`--typos=auto`: none up to 4 characters, 1 up to 8, 2 beyond); an exact match
 always ranks before one with a typo, and the default (0) is fzf's behaviour.
 
 The search engine is [lvim-fuzzy-core](https://github.com/lvim-tech/lvim-fuzzy-core),
-the same as the lvim-fuzzy Neovim plugin's; its `bench/run.sh` times the
+the same as the lvim-fuzzy-cli Neovim plugin's; its `bench/run.sh` times the
 matcher alone against frizbee (and other matchers) on synthetic paths, real
 paths, code lines and Cyrillic text. A match window wider than
 `--exact-window=N` characters (default 4096) is matched greedily in linear
@@ -265,7 +265,7 @@ times the interactive case with hyperfine: start in a pseudo-terminal, load
 the 1 000 000 lines, search, take the top hit (`--sync --bind start:accept`;
 tv: `--input --take-1`):
 
-| query | fzf 0.75 | lvim-fuzzy | television 0.15.9 |
+| query | fzf 0.75 | lvim-fuzzy-cli | television 0.15.9 |
 |---|---:|---:|---:|
 | `lvim` | 166 ms | 162 ms | 388 ms |
 | `tuiview` | 157 ms | 131 ms | 333 ms |
@@ -286,7 +286,7 @@ the line itself (--with-nth, --nth, --ansi).
     scripts/install.sh
 
 builds the release binary and installs `~/.local/bin/lvim-fuzzy`, the short
-name `lfz`, the man page (`man lvim-fuzzy`) and, when `~/.config/zsh` holds
+name `lfz`, the man page (`man lvim-fuzzy-cli`) and, when `~/.config/zsh` holds
 zsh modules, `86-lvim-fuzzy.zsh` with the completion and your `[shell.keys]`;
 otherwise it prints the line for `.zshrc` / `.bashrc` / `config.fish`.
 With an `lvim-colorscheme` checkout next to it (or `LVIM_COLORSCHEME=path`) it
@@ -310,7 +310,7 @@ BSD-3-Clause
 
 Every preview that is not plain text — a picture, a video, a PDF, a font, a document, a sound, a directory, a CSV
 table, an archive, a binary file — is made by the preview plugin (`lvim-fuzzy-plugin-preview`): which engine shows a file
-type is that plugin's configuration, lfz only draws the answer. `lvim-fuzzy preview --plugin [--plugins JSON]
+type is that plugin's configuration, lfz only draws the answer. `lvim-fuzzy-cli preview --plugin [--plugins JSON]
 [--host NAME] [--size COLSxROWS] [--px WxH] [--skip N] -- PATH` prints the plugin's answer as a JSON array of
 instructions (`[{"op":"preview","facts":…,"missing":…,"picture":{"path","width","height"},"body":…}]`, or
 `[{"op":"pass"}]`); the picture is a PNG in `$XDG_CACHE_HOME/lvim-media/`. lvc, lfz and the Neovim picker
@@ -341,11 +341,11 @@ kind    = "command"
 command = "imv {}"        # {} = the file, quoted for the shell; without it the file is appended
 ```
 
-`lvim-fuzzy open --list` shows which program opens which type as it is configured now (and what is not installed);
-`lvim-fuzzy preview --list` does the same for the previews.
+`lvim-fuzzy-cli open --list` shows which program opens which type as it is configured now (and what is not installed);
+`lvim-fuzzy-cli preview --list` does the same for the previews.
 
 A viewer starts detached and the finder stays open (so several pictures can be opened in a row); with several
 files marked the text ones go to the editor together, the others each to their program. A program that is not
-installed is said in a message and nothing is opened. `lvim-fuzzy open --resolve [--plugins JSON] -- PATH` prints the
+installed is said in a message and nothing is opened. `lvim-fuzzy-cli open --resolve [--plugins JSON] -- PATH` prints the
 plugin's decision as JSON (`{"action":"editor"}`, `{"action":"exec","cmd":"..."}`, `{"action":"missing",...}` or
 `{"action":"none"}`), which is how the Neovim picker asks.

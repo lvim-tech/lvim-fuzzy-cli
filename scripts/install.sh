@@ -1,8 +1,8 @@
 #!/bin/sh
-# Build lvim-fuzzy and install it for the current user:
-#   ~/.local/bin/lvim-fuzzy        the binary
+# Build lvim-fuzzy-cli and install it for the current user:
+#   ~/.local/bin/lvim-fuzzy-cli    the binary
 #   ~/.local/bin/lfz               a short name (symlink)
-#   ~/.local/share/man/man1/       lvim-fuzzy.1 and lfz.1
+#   ~/.local/share/man/man1/       lvim-fuzzy-cli.1 and lfz.1
 #   ~/.config/zsh/86-lvim-fuzzy.zsh   completion + [shell.keys], when ~/.config/zsh
 #                                     holds zsh modules (else: the line to add)
 # PREFIX (default ~/.local) and ZSH_MODULES override the places.
@@ -13,14 +13,23 @@ bin=$prefix/bin
 man=$prefix/share/man/man1
 
 cargo build --release
+target=${CARGO_TARGET_DIR:-target}   # CARGO_TARGET_DIR: where cargo builds (a full disk, a shared target)
 mkdir -p "$bin" "$man"
-install -m 755 target/release/lvim-fuzzy "$bin/lvim-fuzzy"
-ln -sf lvim-fuzzy "$bin/lfz"
-"$bin/lvim-fuzzy" --man > "$man/lvim-fuzzy.1"
-ln -sf lvim-fuzzy.1 "$man/lfz.1"
-echo "installed: $bin/lvim-fuzzy, $bin/lfz, $man/lvim-fuzzy.1"
+install -m 755 "$target/release/lvim-fuzzy-cli" "$bin/lvim-fuzzy-cli"
+ln -sf lvim-fuzzy-cli "$bin/lfz"
+"$bin/lvim-fuzzy-cli" --man > "$man/lvim-fuzzy-cli.1"
+ln -sf lvim-fuzzy-cli.1 "$man/lfz.1"
+echo "installed: $bin/lvim-fuzzy-cli, $bin/lfz, $man/lvim-fuzzy-cli.1"
+# the program used to be called lvim-fuzzy (the name read like the family, not the terminal finder): the old file and man
+# page go, and what called it by that name is pointed at the new one
+if [ -e "$bin/lvim-fuzzy" ] || [ -L "$bin/lvim-fuzzy" ]; then rm -f "$bin/lvim-fuzzy" "$man/lvim-fuzzy.1"; echo "removed the old name: $bin/lvim-fuzzy"; fi
+unit=${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/lvim-fuzzy-pool.service
+if [ -f "$unit" ] && grep -q "/bin/lvim-fuzzy pool" "$unit"; then
+    sed -i "s|/bin/lvim-fuzzy pool|/bin/lvim-fuzzy-cli pool|" "$unit"
+    echo "systemd: $unit now runs lvim-fuzzy-cli;  run: systemctl --user daemon-reload && systemctl --user restart lvim-fuzzy-pool"
+fi
 # the Material icons, shared with lvim-icons and lvim-commander: written when missing there or older
-"$bin/lvim-fuzzy" --install-icons
+"$bin/lvim-fuzzy-cli" --install-icons
 
 # every lvim theme, from an lvim-colorscheme checkout next to this one (themer
 # installs and switches the current one; existing files are left alone)
@@ -37,11 +46,11 @@ else
     echo "themes: no lvim-colorscheme checkout at $src (LVIM_COLORSCHEME=path); themer installs the current one"
 fi
 
-line='(( $+commands[lvim-fuzzy] )) && eval "$(lvim-fuzzy --zsh)"'
+line='(( $+commands[lvim-fuzzy-cli] )) && eval "$(lvim-fuzzy-cli --zsh)"'
 modules=${ZSH_MODULES:-${XDG_CONFIG_HOME:-$HOME/.config}/zsh}
 if [ -d "$modules" ]; then
     cat > "$modules/86-lvim-fuzzy.zsh" <<ZSH
-# 86-lvim-fuzzy — lvim-fuzzy (lfz): completion of modes, options and values,
+# 86-lvim-fuzzy — lvim-fuzzy-cli (lfz): completion of modes, options and values,
 # and the keys from [shell.keys] in ~/.config/lvim-fuzzy/config.toml.
 # After 30-completion (compinit) and 85-zinit (the ZLE plugins).
 __lvf_load() { $line; }
@@ -50,13 +59,13 @@ __lvf_load
 # bind the keys once more then, after them, and drop the hook
 __lvf_late() { add-zsh-hook -d precmd __lvf_late; __lvf_load; }
 autoload -Uz add-zsh-hook && add-zsh-hook precmd __lvf_late
-# the man page (lvim-fuzzy.1 / lfz.1); MANPATH is set explicitly elsewhere
+# the man page (lvim-fuzzy-cli.1 / lfz.1); MANPATH is set explicitly elsewhere
 [[ ":\$MANPATH:" == *":$prefix/share/man:"* ]] || export MANPATH="$prefix/share/man:\$MANPATH"
 ZSH
     echo "zsh: $modules/86-lvim-fuzzy.zsh"
 else
     echo "zsh: add to ~/.zshrc after compinit:  $line"
-    echo "bash: add to ~/.bashrc:  eval \"\$(lvim-fuzzy --bash)\""
-    echo "fish: add to config.fish:  lvim-fuzzy --fish | source"
+    echo "bash: add to ~/.bashrc:  eval \"\$(lvim-fuzzy-cli --bash)\""
+    echo "fish: add to config.fish:  lvim-fuzzy-cli --fish | source"
 fi
 case ":$PATH:" in *":$bin:"*) ;; *) echo "note: $bin is not in PATH";; esac

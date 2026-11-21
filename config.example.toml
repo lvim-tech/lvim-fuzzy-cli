@@ -1,4 +1,4 @@
-# lvim-fuzzy (lfz): every setting of the config, commented out.
+# lvim-fuzzy-cli (lfz): every setting of the config, commented out.
 #
 # The file: ~/.config/lvim-fuzzy/config.toml ($LVIM_FUZZY_CONFIG, --config PATH,
 # --no-config). Remove the `#` before a line to use it. The whole file is
@@ -15,7 +15,7 @@
 # title_pos = "left"            # the title: left | center | right
 # editor    = "nvim"            # what `open` (enter) starts: nvim | vim | hx | code | ...,
 #                               # or a template: "kak +{line} {file}"
-# options   = ["--cycle"]       # any lvim-fuzzy option
+# options   = ["--cycle"]       # any lvim-fuzzy-cli option
 
 # --- Texts --------------------------------------------------------------------
 

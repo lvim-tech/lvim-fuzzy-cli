@@ -6,7 +6,7 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-const ME: &str = env!("CARGO_BIN_EXE_lvim-fuzzy");
+const ME: &str = env!("CARGO_BIN_EXE_lvim-fuzzy-cli");
 
 fn have_fzf() -> bool {
     Command::new("fzf")

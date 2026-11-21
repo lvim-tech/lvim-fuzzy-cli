@@ -12,7 +12,7 @@ me=$here/../target/release/lvim-fuzzy
 for q in "$@"; do
     echo "== $q"
     set -- -n fzf "python3 $here/ptyrun.py sh -c \"fzf --query '$q' --sync --bind start:accept < $corpus > /dev/null\"" \
-        -n lvim-fuzzy "python3 $here/ptyrun.py sh -c \"$me --query '$q' --sync --bind start:accept < $corpus > /dev/null\""
+        -n lvim-fuzzy-cli "python3 $here/ptyrun.py sh -c \"$me --query '$q' --sync --bind start:accept < $corpus > /dev/null\""
     if command -v tv >/dev/null; then
         set -- "$@" -n tv "python3 $here/ptyrun.py sh -c \"tv --source-command 'cat $corpus' --input '$q' --take-1 --no-preview > /dev/null\""
     fi
