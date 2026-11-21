@@ -2,7 +2,7 @@
 
 `lvim-fuzzy` is a fuzzy finder for the terminal, compatible with
 [fzf](https://github.com/junegunn/fzf), built on the
-[lvim-fuzzy](https://github.com/lvim-tech/lvim-fuzzy) scoring model, with the
+[lvim-fuzzy](https://github.com/lvim-tech/lvim-fuzzy-nvim) scoring model, with the
 look of lvim-picker — without needing Neovim.
 
 Status: early development.
@@ -24,6 +24,10 @@ Status: early development.
   `--popup=[center|top|bottom|left|right][,W%][,H%]`.
 - Layouts, multi-select, mouse.
 - F1 shows the active keys, F2 the modes.
+- File icons as Material IMAGES where the terminal takes kitty placeholders (kitty, ghostty, zellij
+  built with them), Nerd glyphs elsewhere: `[icons] mode = "auto" | "image" | "font"`. The set is shared
+  with lvim-icons and lvim-fuzzy-commander in `~/.local/share/lvim-icons/material`; `lvim-fuzzy --install-icons`
+  (run by `scripts/install.sh`) puts it there when it is missing or older.
 
 ## Shell integration
 
@@ -301,3 +305,47 @@ cargo build --release
 ## License
 
 BSD-3-Clause
+
+### The preview plugins, for other front ends
+
+Every preview that is not plain text — a picture, a video, a PDF, a font, a document, a sound, a directory, a CSV
+table, an archive, a binary file — is made by the preview plugin (`lvim-fuzzy-plugin-preview`): which engine shows a file
+type is that plugin's configuration, lfz only draws the answer. `lvim-fuzzy preview --plugin [--plugins JSON]
+[--host NAME] [--size COLSxROWS] [--px WxH] [--skip N] -- PATH` prints the plugin's answer as a JSON array of
+instructions (`[{"op":"preview","facts":…,"missing":…,"picture":{"path","width","height"},"body":…}]`, or
+`[{"op":"pass"}]`); the picture is a PNG in `$XDG_CACHE_HOME/lvim-media/`. lvc, lfz and the Neovim picker
+(lvim-picker) all ask it, so they show a file the same way. lfz's own settings for a plugin go in
+`[plugins.<name>]` of its config; the provider chain starts with `plugin` (`--preview-order plugin,nvim,file,command`
+is the default).
+
+### Where the preview sits
+
+`alt-p` turns the preview through right → left → up → hidden → right, `alt-P` the other way, `alt-e` hides and
+shows it (`rotate-preview`, `rotate-preview-back`, `toggle-preview`: bind them to other keys with `--bind`). The
+Neovim picker (lvim-picker) turns its preview through the same places with `<C-n>` / `<C-p>` and hides it with
+`<C-e>`. A preview put at the bottom with `--preview-window=down` is off the cycle: forward from it hides it, back
+goes up.
+
+### Opening a file
+
+Enter on a file opens it the way lvim-fuzzy-commander and the Neovim picker (lvim-fuzzy-picker) do — one rule, the
+open plugin's (`lvim-fuzzy-plugin-open`): which program opens which type is its configuration (default: the editor for
+text, `xdg-open` for the rest). lfz's own layer goes in `[plugins.lvim-fuzzy-plugin-open]` of its config:
+
+```toml
+[plugins.lvim-fuzzy-plugin-open.types.pictures]
+mime   = ["image/*"]
+engine = "imv"
+[plugins.lvim-fuzzy-plugin-open.engines.imv]
+kind    = "command"
+command = "imv {}"        # {} = the file, quoted for the shell; without it the file is appended
+```
+
+`lvim-fuzzy open --list` shows which program opens which type as it is configured now (and what is not installed);
+`lvim-fuzzy preview --list` does the same for the previews.
+
+A viewer starts detached and the finder stays open (so several pictures can be opened in a row); with several
+files marked the text ones go to the editor together, the others each to their program. A program that is not
+installed is said in a message and nothing is opened. `lvim-fuzzy open --resolve [--plugins JSON] -- PATH` prints the
+plugin's decision as JSON (`{"action":"editor"}`, `{"action":"exec","cmd":"..."}`, `{"action":"missing",...}` or
+`{"action":"none"}`), which is how the Neovim picker asks.

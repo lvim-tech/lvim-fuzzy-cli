@@ -438,6 +438,11 @@ impl App {
     ) -> std::io::Result<()> {
         let out = &mut term.out;
         queue!(out, terminal::BeginSynchronizedUpdate, cursor::Hide)?;
+        // icon images drawn for the first time in this frame: sent before the cells that show them
+        let pending = lvim_fuzzy_ui::iconimg::take_pending();
+        if !pending.is_empty() {
+            std::io::Write::write_all(out, &pending)?;
+        }
         cv.flush(out, term.prev.as_ref(), &mut term.pos)?;
         if let Some((x, y)) = cursor_pos {
             term.pos.goto(out, x, y)?;

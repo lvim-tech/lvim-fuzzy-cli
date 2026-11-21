@@ -208,6 +208,19 @@ pub(super) struct Preview {
     file_template: String,
     file_target: Option<(String, usize, usize)>,
     loader: crate::filepreview::Loader,
+    /// Draws the plugins' answers (and keeps the picture on the terminal): the component lvc uses too.
+    drawer: lvim_fuzzy_ui::provided::Drawer,
+    /// The position in a multi-page file (a PDF page, a video step) the plugin is asked for; 0 = the first.
+    plug_skip: u32,
+    /// What the plugin provider shows, and how many rows it has (for scrolling).
+    list_target: Option<std::path::PathBuf>,
+    rows_total: usize,
+    /// The preview plugins (None = none installed), the request in flight (ticket, file) and the answers so far.
+    plug: Option<lvim_fuzzy_plugin::Previewer>,
+    /// The plugin host the open plugin is asked through (Enter on a file); made at the first Enter.
+    opener: Option<lvim_fuzzy_plugin::Previewer>,
+    plug_wait: Option<(u64, std::path::PathBuf, u32)>,
+    plug_answers: std::collections::HashMap<(std::path::PathBuf, u32), lvim_fuzzy_ui::provided::Answer>,
 }
 
 struct Term {
@@ -349,6 +362,11 @@ impl Term {
     }
 
     fn close(mut self) -> std::io::Result<()> {
+        // the icon images go with the finder
+        let gone = lvim_fuzzy_ui::iconimg::cleanup();
+        if !gone.is_empty() {
+            self.out.write_all(&gone)?;
+        }
         self.suspend()
     }
 }
@@ -508,13 +526,25 @@ fn preview_target(o: &Options) -> String {
         .unwrap_or_else(|| "{}".into())
 }
 
+/// The preview plugins of `~/.config/lvim-plugins` (or `$LVIM_PLUGIN_ROOTS`, `:`-separated), set up with lfz's own
+/// `[plugins.<name>]` overrides. None when no plugin previews anything.
+fn preview_plugins(wake: std::sync::mpsc::Sender<()>) -> Option<lvim_fuzzy_plugin::Previewer> {
+    let own = crate::PLUGINS.get().cloned().unwrap_or_default();
+    let p = crate::plugin_host("lfz", &own, wake);
+    (!p.is_empty()).then_some(p)
+}
+
 fn preview_order(o: &Options) -> Result<Vec<pview::Provider>, String> {
     if let Some(v) = &o.preview_order {
         return v.iter().map(|s| pview::Provider::parse(s)).collect();
     }
-    // 1. Neovim (files, when it is installed or asked for), 2. the built-in file
-    // preview (lvim look), 3. the --preview command (everything that is not a file)
-    let mut v = Vec::new();
+    // 1. the preview plugins (everything they have an engine for: pictures, tables, directories ...), 2. Neovim (files, when it is
+    // installed or asked for), 3. the built-in file preview (lvim look), 4. the --preview command
+    // (everything that is not a file)
+    // (a directory, a table, an archive, a binary file and text come from the preview plugin, first in the chain)
+    let mut v = vec![
+        pview::Provider::Plugin,
+    ];
     if o.preview_nvim.is_some()
         || crate::modes::on_path(o.nvim.split_whitespace().next().unwrap_or("nvim"))
     {
@@ -622,6 +652,14 @@ pub fn run(opts: Options) -> Result<i32, String> {
         file_template: preview_target(&opts),
         file_target: None,
         loader: crate::filepreview::Loader::new(wake_tx.clone()),
+        drawer: lvim_fuzzy_ui::provided::Drawer::new(true),
+        plug_skip: 0,
+        list_target: None,
+        rows_total: 0,
+        plug: preview_plugins(wake_tx.clone()),
+        opener: None,
+        plug_wait: None,
+        plug_answers: Default::default(),
     };
     stage("before source");
     let (feed_tx, feed_rx) = channel();
@@ -813,6 +851,12 @@ pub fn run(opts: Options) -> Result<i32, String> {
         app.look.as_ref().and_then(|l| l.caret.bg),
     )
     .map_err(|e| format!("cannot open the terminal: {e}"))?;
+    // file icons as Material images where the terminal takes them: in raw mode, before input is read
+    if app.opts.icons
+        && let Some(m) = lvim_fuzzy_ui::iconimg::Mode::parse(&app.opts.icon_mode)
+    {
+        lvim_fuzzy_ui::iconimg::init(m, app.opts.zellij_images);
+    }
     app.request();
     stage("terminal open");
     app.pending_events.push("start");
@@ -1047,6 +1091,15 @@ impl App {
         self.draw(&mut term).map_err(|e| e.to_string())?;
         self.quit_nvim();
         Ok(0)
+    }
+
+    /// What the open plugin says to do with the file `path` (asked through a host of its own, made on first use).
+    fn open_decision(&mut self, path: &str) -> lvim_fuzzy_ui::open::Open {
+        let opener = self.pv.opener.get_or_insert_with(|| {
+            let (wake, _rx) = std::sync::mpsc::channel();
+            crate::plugin_host("lfz", &crate::PLUGINS.get().cloned().unwrap_or_default(), wake)
+        });
+        crate::open_decision(opener, "lfz", path)
     }
 
     fn toast(&mut self, text: String, error: bool) {
@@ -1390,6 +1443,7 @@ impl App {
             }
             // results
             while wake_rx.try_recv().is_ok() {}
+            self.poll_plugins();
             let result = self.engine.result.lock().unwrap().take();
             if let Some((g, hits, _n)) = result {
                 // a result of a query already typed past: the rows stay until
@@ -1679,6 +1733,7 @@ impl App {
                 Ok(None)
             }
             TermEvent::Resize(w, h) => {
+                lvim_fuzzy_ui::iconimg::resized();
                 if term.fullscreen {
                     term.height = h;
                 }

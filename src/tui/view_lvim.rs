@@ -463,18 +463,28 @@ impl App {
                 && p.exists()
                 && let Some((ic, accent)) = crate::lvim::icon_for(&self.opts, path_part, p.is_dir())
             {
-                let fg = l.theme.color(accent).or(base.fg);
-                x = cv.put(
-                    x,
-                    y,
-                    ic,
-                    Style {
-                        fg,
-                        bg: base.bg,
-                        ..base
-                    },
-                    limit,
-                );
+                // a Material image where the terminal takes them (none of the user's own icons set)
+                let image = if self.opts.icon_map.is_empty() {
+                    lvim_fuzzy_ui::iconimg::image_id(path_part, p.is_dir())
+                } else {
+                    None
+                };
+                if let Some(id) = image {
+                    x = cv.put_image_icon(x, y, id, base.bg, limit);
+                } else {
+                    let fg = l.theme.color(accent).or(base.fg);
+                    x = cv.put(
+                        x,
+                        y,
+                        ic,
+                        Style {
+                            fg,
+                            bg: base.bg,
+                            ..base
+                        },
+                        limit,
+                    );
+                }
                 x = cv.put(x, y, " ", base, limit);
             }
             // text, scrolled so the last match is visible
@@ -622,6 +632,7 @@ impl App {
                 self.pv.file_target.as_ref().map(|t| t.0.clone())
             }
             Some(pview::Provider::Nvim) => Some(self.pv.label.clone()).filter(|s| !s.is_empty()),
+            Some(pview::Provider::Plugin) => self.pv.list_target.as_ref().map(|p| p.to_string_lossy().into_owned()),
             _ => None,
         };
         // one look for every case: a label that names a file is drawn as a
@@ -655,9 +666,22 @@ impl App {
         let (ic, accent) = crate::lvim::icon_for(&self.opts, &path, p.is_dir()).unwrap_or(("", ""));
         let icon_st = Style {
             fg: l.theme.color(accent).or(l.file_icon.fg),
+            // on the title's brighter background, with the name
+            bg: l.file_name.bg.or(l.file_icon.bg),
             ..l.file_icon
         };
-        let mut x = cv.put(r.x, r.y, &format!(" {ic}"), icon_st, limit);
+        let image = if ic.is_empty() || !self.opts.icon_map.is_empty() {
+            None
+        } else {
+            lvim_fuzzy_ui::iconimg::image_id(&path, p.is_dir())
+        };
+        let mut x = match image {
+            Some(id) => {
+                let x = cv.put(r.x, r.y, " ", l.file_name, limit);
+                cv.put_image_icon(x, r.y, id, l.file_name.bg, limit)
+            }
+            None => cv.put(r.x, r.y, &format!(" {ic}"), icon_st, limit),
+        };
         x = cv.put(x, r.y, &format!(" {name} "), l.file_name, limit);
         if !dir.is_empty() && dir != "." {
             let d = dir.trim_start_matches("./");
@@ -786,7 +810,7 @@ impl App {
                         w: inner.w,
                         h: inner.h - skip,
                     };
-                    self.draw_preview(&mut cv, body);
+                    self.draw_preview(&mut cv, body, Some(&l));
                     if self.pv.focus && self.nvim_mode() {
                         cursor_pos = self.nvim_cursor;
                     }

@@ -59,6 +59,9 @@ PREVIEW
       --target=T *        The item's file[:line[:col]] for the Neovim / file preview
       --preview-order=L * nvim,file,command and [previewers.*] from the config
       --nvim=PROG *, --nvim-appname=NAME *
+      --icon-mode=auto|image|font *  Material images where the terminal takes them (default auto)
+      --no-zellij-images *  this zellij does not take kitty placeholders
+      --install-icons *   put the Material icons into ~/.local/share/lvim-icons/material (if newer)
       --no-pool *         Always start the preview's Neovim (not one from `lvim-fuzzy pool`)
 
 HEADER
@@ -78,7 +81,8 @@ SHELL INTEGRATION
 
 KEYS IN THE FINDER *
   F1 keys   F2 modes   F3 grep/filter   F4 filter scope   F5 theme
-  alt-p preview side
+  alt-p / alt-P preview side (right, left, up, hidden)
+  alt-e hide / show the preview
   ctrl-] focus the Neovim preview
 
 FILES AND ENVIRONMENT

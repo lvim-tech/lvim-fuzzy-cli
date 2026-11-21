@@ -51,6 +51,8 @@ pub struct Config {
     pub args: Vec<String>,
     pub modes: Vec<Mode>,
     pub previewers: Vec<crate::previewers::Previewer>,
+    /// `[plugins.<name>]`: lfz's own overrides of the plugins' settings (a table per plugin).
+    pub plugins: toml::Table,
     /// `[shell]`: the keys `lvim-fuzzy --zsh/--bash/--fish` binds (none by default).
     pub shell: crate::shell::ShellCfg,
 }
@@ -101,6 +103,21 @@ fn look_icons(
         return;
     };
     for (ik, iv) in t {
+        if ik == "mode" {
+            match iv.as_str() {
+                Some(m) if lvim_fuzzy_ui::iconimg::Mode::parse(m).is_some() => args.push(format!("--icon-mode={m}")),
+                _ => errs.push(format!("{}: {what}.mode must be \"auto\", \"image\" or \"font\"", at(ik))),
+            }
+            continue;
+        }
+        if ik == "zellij_images" {
+            match iv.as_bool() {
+                Some(true) => args.push("--zellij-images".into()),
+                Some(false) => args.push("--no-zellij-images".into()),
+                None => errs.push(format!("{}: {what}.zellij_images must be true or false", at(ik))),
+            }
+            continue;
+        }
         if ik == "enabled" {
             match iv.as_bool() {
                 Some(true) => args.push("--icons".into()),
@@ -192,6 +209,7 @@ pub fn load(explicit: Option<&str>) -> Result<Config, Vec<String>> {
             args: Vec::new(),
             modes: Vec::new(),
             previewers: Vec::new(),
+            plugins: toml::Table::new(),
             shell: Default::default(),
         });
     };
@@ -203,6 +221,7 @@ pub fn load(explicit: Option<&str>) -> Result<Config, Vec<String>> {
                 args: Vec::new(),
                 modes: Vec::new(),
                 previewers: Vec::new(),
+                plugins: toml::Table::new(),
                 shell: Default::default(),
             });
         }
@@ -312,7 +331,7 @@ pub fn load(explicit: Option<&str>) -> Result<Config, Vec<String>> {
                                     let bad: Vec<&String> = list
                                         .iter()
                                         .filter(|x| {
-                                            !matches!(x.as_str(), "nvim" | "file" | "command")
+                                            !matches!(x.as_str(), "plugin" | "nvim" | "file" | "command")
                                                 && !previewers.iter().any(|p| &p.name == *x)
                                         })
                                         .collect();
@@ -444,6 +463,11 @@ pub fn load(explicit: Option<&str>) -> Result<Config, Vec<String>> {
             "icons" => look_icons(v, "icons", &mut args, &mut errs, &at),
             "show" => look_show(v, "show", &mut args, &mut errs, &at),
             "previewers" => {} // read above
+            "plugins" => {
+                if !v.is_table() || v.as_table().is_some_and(|t| t.values().any(|x| !x.is_table())) {
+                    errs.push(format!("{}: [plugins] must be a table of tables: [plugins.<plugin name>]", at("plugins")));
+                }
+            }
             "pool" => match v.as_table() {
                 None => errs.push(format!("{}: [pool] must be a table", at("pool"))),
                 Some(t) => {
@@ -485,6 +509,7 @@ pub fn load(explicit: Option<&str>) -> Result<Config, Vec<String>> {
             args,
             modes: modes_out,
             previewers,
+            plugins: doc.get("plugins").and_then(|v| v.as_table()).cloned().unwrap_or_default(),
             shell: shell_cfg,
         })
     } else {

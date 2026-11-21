@@ -19,6 +19,8 @@ ln -sf lvim-fuzzy "$bin/lfz"
 "$bin/lvim-fuzzy" --man > "$man/lvim-fuzzy.1"
 ln -sf lvim-fuzzy.1 "$man/lfz.1"
 echo "installed: $bin/lvim-fuzzy, $bin/lfz, $man/lvim-fuzzy.1"
+# the Material icons, shared with lvim-icons and lvim-commander: written when missing there or older
+"$bin/lvim-fuzzy" --install-icons
 
 # every lvim theme, from an lvim-colorscheme checkout next to this one (themer
 # installs and switches the current one; existing files are left alone)

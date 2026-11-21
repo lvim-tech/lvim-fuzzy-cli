@@ -431,10 +431,26 @@ impl App {
                             .map(|i| self.target_for(i, &tpl))
                             .filter(|(p, _, _)| !p.is_empty() && std::path::Path::new(p).exists())
                             .collect();
-                        if !targets.is_empty() {
-                            let cmd = editor_command_many(self.opts.editor.as_deref(), &targets);
+                        // each file the way the open plugin says (as lvc and the picker do): a picture or a PDF in its
+                        // viewer, detached; what is text, all together in the editor
+                        let mut for_editor = Vec::new();
+                        for t in targets {
+                            match self.open_decision(&t.0) {
+                                lvim_fuzzy_ui::open::Open::Exec(line) => {
+                                    if let Err(e) = lvim_fuzzy_ui::open::spawn_detached(&line) {
+                                        self.toast(format!("cannot open {}: {e}", t.0), true);
+                                    }
+                                }
+                                lvim_fuzzy_ui::open::Open::Editor => for_editor.push(t),
+                                lvim_fuzzy_ui::open::Open::Missing(m) => self.toast(m.join("; "), true),
+                                lvim_fuzzy_ui::open::Open::Pass => self.toast(format!("no open plugin has an answer for {}", t.0), true),
+                            }
+                        }
+                        if !for_editor.is_empty() {
+                            let cmd = editor_command_many(self.opts.editor.as_deref(), &for_editor);
                             return Ok(Some(Outcome::Become(cmd)));
                         }
+                        continue;
                     }
                     // else the focused item's file in the editor, at its line (grep results)
                     let (path, line, col) = self.target(&tpl);
@@ -442,8 +458,29 @@ impl App {
                         // not a file (a process, a commit, ...): print it instead
                         return Ok(Some(Outcome::Accept { key: None }));
                     } else {
-                        let cmd = editor_command(self.opts.editor.as_deref(), &path, line, col);
-                        return Ok(Some(Outcome::Become(cmd)));
+                        // the same rule as lvc and the Neovim picker: what the open plugin says — a program (detached),
+                        // the editor — and the finder stays open after a viewer starts
+                        match self.open_decision(&path) {
+                            lvim_fuzzy_ui::open::Open::Exec(cmd) => {
+                                match lvim_fuzzy_ui::open::spawn_detached(&cmd) {
+                                    Ok(()) => self.toast(format!("opened {path}"), false),
+                                    Err(e) => self.toast(format!("cannot open {path}: {e}"), true),
+                                }
+                                continue;
+                            }
+                            lvim_fuzzy_ui::open::Open::Editor => {
+                                let cmd = editor_command(self.opts.editor.as_deref(), &path, line, col);
+                                return Ok(Some(Outcome::Become(cmd)));
+                            }
+                            lvim_fuzzy_ui::open::Open::Missing(m) => {
+                                self.toast(m.join("; "), true);
+                                continue;
+                            }
+                            lvim_fuzzy_ui::open::Open::Pass => {
+                                self.toast(format!("no open plugin has an answer for {path}"), true);
+                                continue;
+                            }
+                        }
                     }
                 }
                 "up" => self.move_vert(true, 1),

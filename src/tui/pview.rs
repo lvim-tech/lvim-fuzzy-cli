@@ -5,6 +5,9 @@ use crate::preview::{Pos, Spec, scroll_offset};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Provider {
+    /// The preview plugins (lvim-fuzzy-plugin-preview ...): they choose the engine for the file's type and compute the
+    /// answer; lfz draws it.
+    Plugin,
     Nvim,
     File,
     Command,
@@ -12,16 +15,47 @@ pub(crate) enum Provider {
     User(usize),
 }
 
+/// The next place of the preview in the cycle right → left → up → hidden → right (`dir` 1), or the one before
+/// (-1): the same cycle the Neovim picker has. A preview put at the bottom (`--preview-window=down`) is not on
+/// the cycle: forward from it goes to hidden, back to up.
+pub(crate) fn rotate_side(pos: Pos, visible: bool, dir: i32) -> (Pos, bool) {
+    // 0 right, 1 left, 2 up, 3 hidden; the bottom sits between up and hidden
+    let at = match (visible, pos) {
+        (false, _) => 3,
+        (true, Pos::Right) => 0,
+        (true, Pos::Left) => 1,
+        (true, Pos::Up) => 2,
+        (true, Pos::Down) => 3,
+    };
+    let to = if matches!((visible, pos), (true, Pos::Down)) {
+        if dir > 0 { 3 } else { 2 }
+    } else {
+        (at as i32 + dir).rem_euclid(4)
+    };
+    match to {
+        0 => (Pos::Right, true),
+        1 => (Pos::Left, true),
+        2 => (Pos::Up, true),
+        _ => (pos_for_hidden(pos), false),
+    }
+}
+
+/// Hiding keeps the side the preview comes back on: the bottom one returns on the right.
+fn pos_for_hidden(pos: Pos) -> Pos {
+    if pos == Pos::Down { Pos::Right } else { pos }
+}
+
 impl Provider {
     pub(crate) fn parse(s: &str) -> Result<Provider, String> {
         match s.trim() {
+            "plugin" | "plugins" => Ok(Provider::Plugin),
             "nvim" | "neovim" => Ok(Provider::Nvim),
             "file" | "builtin" => Ok(Provider::File),
             "command" | "cmd" => Ok(Provider::Command),
             o => match crate::previewers().iter().position(|p| p.name == o) {
                 Some(i) => Ok(Provider::User(i)),
                 None => Err(format!(
-                    "unknown preview provider: {o} (nvim, file, command, or a [previewers.<name>] from the config)"
+                    "unknown preview provider: {o} (plugin, nvim, file, command, or a [previewers.<name>] from the config)"
                 )),
             },
         }
@@ -511,10 +545,71 @@ impl App {
             return;
         };
         // the first provider in the chain that can show this item
-        let order = self.pv.order.clone();
+        let mut order = self.pv.order.clone();
+        // a plugin that answered "show it with Neovim / the built-in highlighter" for this file: that is the
+        // provider now (the plugin chose the engine from its configuration; lfz only carries it out)
+        if order.contains(&Provider::Plugin) {
+            let tpl = self.pv.file_template.clone();
+            let ppath = std::path::PathBuf::from(self.target(&tpl).0);
+            let redirect = match self.pv.plug_answers.get(&(ppath, self.pv.plug_skip)) {
+                Some(lvim_fuzzy_ui::provided::Answer::Preview(p)) if p.missing.is_empty() => match p.renderer.as_deref() {
+                    Some("nvim") => Some(Provider::Nvim),
+                    Some("builtin") => Some(Provider::File),
+                    _ => None,
+                },
+                _ => None,
+            };
+            if let Some(to) = redirect {
+                order.retain(|x| *x != Provider::Plugin);
+                order.insert(0, to);
+            }
+        }
         self.pv.active = None;
         for p in order {
             match p {
+                Provider::Plugin => {
+                    if self.look.is_none() || self.pv.plug.is_none() {
+                        continue;
+                    }
+                    let tpl = self.pv.file_template.clone();
+                    let path = std::path::PathBuf::from(self.target(&tpl).0);
+                    if path.as_os_str().is_empty() {
+                        continue;
+                    }
+                    // another file: its first position, its picture waits a moment
+                    if self.pv.list_target.as_ref() != Some(&path) {
+                        self.pv.offset = 0;
+                        self.pv.plug_skip = 0;
+                        self.pv.drawer.moved();
+                        self.pv.list_target = Some(path.clone());
+                    }
+                    let skip = self.pv.plug_skip;
+                    match self.pv.plug_answers.get(&(path.clone(), skip)) {
+                        // no plugin wants this file: the rest of the chain
+                        Some(lvim_fuzzy_ui::provided::Answer::Pass) => continue,
+                        Some(_) => {}
+                        None => {
+                            let asked = self.pv.plug_wait.as_ref().is_some_and(|(_, p, k)| *p == path && *k == skip);
+                            if !asked {
+                                let (w, h) = self.pv.size;
+                                let (pw, ph) = lvim_fuzzy_ui::provided::wanted_px(Rect { x: 0, y: 0, w, h });
+                                let extra = serde_json::json!({"cols": w, "rows": h, "host": "lfz", "skip": skip, "max_px": [pw, ph]});
+                                let ticket = self.pv.plug.as_mut().and_then(|pl| pl.request(&path, extra));
+                                match ticket {
+                                    Some(t) => self.pv.plug_wait = Some((t, path.clone(), skip)),
+                                    // no provider matches this file at all
+                                    None => {
+                                        self.pv.plug_answers.insert((path, skip), lvim_fuzzy_ui::provided::Answer::Pass);
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    self.pv.active = Some(p);
+                    self.pv.label = path.to_string_lossy().into_owned();
+                    return;
+                }
                 Provider::Nvim => {
                     // Neovim previews FILES; anything else (a commit, a process) falls through
                     let tpl = self.pv.nvim_template.clone().unwrap_or_else(|| "{}".into());
@@ -564,6 +659,32 @@ impl App {
                     return;
                 }
             }
+        }
+    }
+
+    /// The plugins' answers that came in: kept per file, and the preview is chosen again (the answer may say
+    /// "Neovim shows this one", or "not mine").
+    pub(super) fn poll_plugins(&mut self) {
+        let Some(pl) = self.pv.plug.as_mut() else { return };
+        let mut changed = false;
+        for r in pl.poll() {
+            if self.pv.plug_wait.as_ref().is_some_and(|(t, ..)| *t == r.ticket) {
+                self.pv.plug_wait = None;
+            }
+            let skip = r.extra["skip"].as_u64().unwrap_or(0) as u32;
+            let answer = r
+                .answer
+                .and_then(|text| lvim_fuzzy_ui::provided::parse(&text))
+                .unwrap_or(lvim_fuzzy_ui::provided::Answer::Pass);
+            if self.pv.plug_answers.len() > 256 {
+                self.pv.plug_answers.clear();
+            }
+            self.pv.plug_answers.insert((r.path, skip), answer);
+            changed = true;
+        }
+        if changed {
+            self.pv.force = true;
+            self.pv.key = None;
         }
     }
 
@@ -621,7 +742,8 @@ impl App {
             .run(self.pv.version, cmd, env);
     }
 
-    pub(super) fn draw_preview(&mut self, cv: &mut Canvas, r: Rect) {
+    /// `look`: the lvim look while it is out of `self` (the lvim view takes it for the frame).
+    pub(super) fn draw_preview(&mut self, cv: &mut Canvas, r: Rect, look: Option<&crate::lvim::Look>) {
         let spec = self.preview_spec(self.term_w, self.term_h);
         let th = &self.theme;
         let pfg = th.get(Slot::PreviewFg);
@@ -663,6 +785,27 @@ impl App {
             return;
         }
         self.pv.inner = Some(inner);
+        // a picture put on the screen stays until it is taken off: only the plugin provider keeps one
+        if self.pv.active != Some(Provider::Plugin) {
+            self.pv.drawer.forget();
+        }
+        if self.pv.active == Some(Provider::Plugin)
+            && let (Some(look), Some(path)) = (look.or(self.look.as_ref()), self.pv.list_target.clone())
+        {
+            let skip = self.pv.plug_skip;
+            match self.pv.plug_answers.get(&(path.clone(), skip)) {
+                Some(lvim_fuzzy_ui::provided::Answer::Preview(p)) => {
+                    let p = p.clone();
+                    let key = format!("{}|{skip}", path.display());
+                    self.pv.rows_total = self.pv.drawer.draw(cv, look, inner, &p, &key, &mut self.pv.offset);
+                }
+                _ => {
+                    cv.put(inner.x + 1, inner.y, "…", look.counter, inner.x + inner.w);
+                    self.pv.rows_total = 0;
+                }
+            }
+            return;
+        }
         if self.nvim_mode() {
             // Neovim still on an earlier item (keys held down, a slow file type, a cold start):
             // the built-in preview shows the current file at once, as fzf + bat would; Neovim
@@ -837,6 +980,9 @@ impl App {
     }
 
     fn preview_lines_total(&self) -> usize {
+        if matches!(self.pv.active, Some(Provider::Plugin)) {
+            return self.pv.rows_total;
+        }
         if self.pv.active == Some(Provider::File)
             && let Some((path, _, _)) = &self.pv.file_target
         {
@@ -870,17 +1016,35 @@ impl App {
                 return true;
             }
         }
-        if name == "rotate-preview" {
-            // right → left → down → up → right (lvim-ui rotates the preview side)
-            let next = match self.pv.spec.pos {
-                Pos::Right => Pos::Left,
-                Pos::Left => Pos::Down,
-                Pos::Down => Pos::Up,
-                Pos::Up => Pos::Right,
+        // a media preview with positions (PDF / document pages, a video's points): the paging keys move them
+        if self.pv.active == Some(Provider::Plugin)
+            && let Some(path) = self.pv.list_target.clone()
+            && let Some(lvim_fuzzy_ui::provided::Answer::Preview(p)) = self.pv.plug_answers.get(&(path, self.pv.plug_skip))
+            && p.positions > 1
+        {
+            let step = match name {
+                "preview-down" | "preview-page-down" | "preview-half-page-down" => Some(1i32),
+                "preview-up" | "preview-page-up" | "preview-half-page-up" => Some(-1),
+                _ => None,
             };
-            self.pv.spec.pos = next;
+            if let Some(d) = step {
+                let last = p.positions - 1;
+                let to = (self.pv.plug_skip as i32 + d).clamp(0, last as i32) as u32;
+                if to != self.pv.plug_skip {
+                    self.pv.plug_skip = to;
+                    self.pv.drawer.moved();
+                    self.pv.force = true;
+                }
+                return true;
+            }
+        }
+        if name == "rotate-preview" || name == "rotate-preview-back" {
+            // right → left → up → hidden → right, as the Neovim picker (lvim-ui) turns it; back is the other way
+            let (pos, visible) =
+                rotate_side(self.pv.spec.pos, self.pv.visible, if name == "rotate-preview" { 1 } else { -1 });
+            self.pv.spec.pos = pos;
             self.pv.spec.alt = None;
-            self.pv.visible = true;
+            self.pv.visible = visible;
             self.pv.force = true;
             return true;
         }
@@ -1011,5 +1175,38 @@ fn expand_home(p: &str) -> String {
             .map(|h| format!("{h}/{rest}"))
             .unwrap_or_else(|_| p.to_string()),
         None => p.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod rotate_tests {
+    use super::*;
+
+    #[test]
+    fn the_cycle_is_right_left_up_hidden() {
+        let mut at = (Pos::Right, true);
+        let mut seen = Vec::new();
+        for _ in 0..4 {
+            at = rotate_side(at.0, at.1, 1);
+            seen.push(at);
+        }
+        assert_eq!(seen, vec![(Pos::Left, true), (Pos::Up, true), (Pos::Up, false), (Pos::Right, true)]);
+        // and the other way round
+        let mut back = Vec::new();
+        for _ in 0..4 {
+            at = rotate_side(at.0, at.1, -1);
+            back.push(at);
+        }
+        // (hidden remembers the side it was left from: here the right, which is where it was)
+        assert_eq!(back, vec![(Pos::Right, false), (Pos::Up, true), (Pos::Left, true), (Pos::Right, true)]);
+    }
+
+    #[test]
+    fn a_bottom_preview_is_off_the_cycle_but_not_lost() {
+        // forward from the bottom: hidden (and it returns on the right); back: up
+        assert_eq!(rotate_side(Pos::Down, true, 1), (Pos::Right, false));
+        assert_eq!(rotate_side(Pos::Down, true, -1), (Pos::Up, true));
+        // hidden returns on the side it was hidden at
+        assert_eq!(rotate_side(Pos::Left, false, 1), (Pos::Right, true));
     }
 }

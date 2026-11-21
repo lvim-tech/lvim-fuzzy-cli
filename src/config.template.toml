@@ -71,7 +71,7 @@
 # --- Keys ---------------------------------------------------------------------
 # key = "action" ( `lfz --bind-help`). Defaults:
 # F1 help, F2 modes, F3 grep ⇄ filter, F4 scope, F5 themes,
-# Tab select, enter open, ctrl-y print, ctrl-] preview focus, alt-p preview side.
+# Tab select, enter open, ctrl-y print, ctrl-] preview focus, alt-p / alt-P preview side (right, left, up, hidden), alt-e hide / show.
 
 # [keys]
 # "ctrl-o" = "execute(less {})"

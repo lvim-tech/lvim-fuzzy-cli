@@ -173,6 +173,7 @@ pub const ACTIONS: &[&str] = &[
     "help",
     "toggle-preview-focus",
     "rotate-preview",
+    "rotate-preview-back",
     "toggle-scope",
     "mode-menu",
     "switch-mode(",
@@ -616,6 +617,8 @@ pub fn default_keymap() -> KeyMap {
     b("f1", "help");
     b("ctrl-]", "toggle-preview-focus");
     b("alt-p", "rotate-preview");
+    b("alt-P", "rotate-preview-back");
+    b("alt-e", "toggle-preview");
     // a function key: multiplexers take ctrl-s (Zellij), window managers alt-<letter>
     b("f4", "toggle-scope");
     b("f2", "mode-menu");
