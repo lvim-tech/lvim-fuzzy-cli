@@ -22,6 +22,7 @@ lvim-fuzzy-plugin-preview = { path = "../lvim-fuzzy-plugin-preview" }
 # ... and the open plugin (`lvim-fuzzy --lvim-plugin open`)
 lvim-fuzzy-plugin-open = { path = "../lvim-fuzzy-plugin-open" }
 lvim-fuzzy-plugin-remote = { path = "../lvim-fuzzy-plugin-remote" }
+lvim-fuzzy-plugin-git = { path = "../lvim-fuzzy-plugin-git" }
 lvim-fuzzy-plugin = { path = "../lvim-fuzzy-plugin", default-features = false }
 crossterm = { version = "0.29", features = ["use-dev-tty"] }
 rayon = "1.12"

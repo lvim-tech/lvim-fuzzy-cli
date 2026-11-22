@@ -629,6 +629,7 @@ dependencies = [
  "libc",
  "lvim-fuzzy-core",
  "lvim-fuzzy-plugin",
+ "lvim-fuzzy-plugin-git",
  "lvim-fuzzy-plugin-open",
  "lvim-fuzzy-plugin-preview",
  "lvim-fuzzy-plugin-remote",
@@ -657,6 +658,15 @@ version = "0.1.0"
 dependencies = [
  "serde_json",
  "toml",
+]
+
+[[package]]
+name = "lvim-fuzzy-plugin-git"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "lvim-fuzzy-plugin",
+ "serde_json",
 ]
 
 [[package]]

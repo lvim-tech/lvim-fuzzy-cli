@@ -41,6 +41,7 @@ fn main() {
     lvim_fuzzy_plugin_preview::run_if_asked(&argv);
     lvim_fuzzy_plugin_open::run_if_asked(&argv);
     lvim_fuzzy_plugin_remote::run_if_asked(&argv);
+    lvim_fuzzy_plugin_git::run_if_asked(&argv);
     let code = match real_main(&argv) {
         Ok(c) => c,
         Err(e) => {
@@ -1197,14 +1198,22 @@ pub(crate) fn plugin_roots() -> Vec<std::path::PathBuf> {
     }
 }
 
+/// Install the plugins that ship inside lfz — only the ones its config asks for (`[plugins.<name>] install = "bundled"`, or the path of a
+/// program; see `lvim_fuzzy_plugin::bundled::Install`): the preview, open, remote and git plugins. Nothing is written by itself.
+pub(crate) fn install_plugins(root: &std::path::Path, own: &toml::Table) {
+    use lvim_fuzzy_plugin::bundled::install_configured;
+    install_configured(root, own, "lvim-fuzzy-plugin-preview", lvim_fuzzy_plugin_preview::ensure_installed);
+    install_configured(root, own, "lvim-fuzzy-plugin-open", lvim_fuzzy_plugin_open::ensure_installed);
+    install_configured(root, own, "lvim-fuzzy-plugin-remote", lvim_fuzzy_plugin_remote::ensure_installed);
+    install_configured(root, own, "lvim-fuzzy-plugin-git", lvim_fuzzy_plugin_git::ensure_installed);
+}
+
 /// The plugin host of this program for `host` (`"lvim-fuzzy-cli"`, `"lvim-fuzzy-picker"`): the plugins that ship inside it are installed
-/// first (whichever tool starts first writes them), then every plugin is loaded, configured with the shared override
+/// first (only the ones the config asks for, see `install_plugins`), then every plugin is loaded, configured with the shared override
 /// files and `own` (the tool's `[plugins.<name>]` tables).
 pub(crate) fn plugin_host(host: &str, own: &toml::Table, wake: std::sync::mpsc::Sender<()>) -> lvim_fuzzy_plugin::Previewer {
     let roots = plugin_roots();
-    lvim_fuzzy_plugin_preview::ensure_installed(&roots[0]);
-    lvim_fuzzy_plugin_open::ensure_installed(&roots[0]);
-    lvim_fuzzy_plugin_remote::ensure_installed(&roots[0]);
+    install_plugins(&roots[0], own);
     lvim_fuzzy_plugin::Previewer::load(&roots, host, own, wake)
 }
 
@@ -1322,7 +1331,7 @@ fn remote_cmd(args: &[String]) -> i32 {
         None => toml::Table::new(),
     };
     let roots = plugin_roots();
-    lvim_fuzzy_plugin_remote::ensure_installed(&roots[0]);
+    install_plugins(&roots[0], &own);
     let (wake, _rx) = std::sync::mpsc::channel();
     let mut r = lvim_fuzzy_plugin::Remote::load(&roots, &host, &own, wake);
     let fail = |text: &str| {

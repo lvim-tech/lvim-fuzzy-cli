@@ -306,6 +306,20 @@ cargo build --release
 
 BSD-3-Clause
 
+### The plugins that ship inside lfz
+
+The preview, open, remote and git plugins are inside lfz (`lvim-fuzzy-cli --lvim-plugin <name>`), and **nothing installs them by itself**: lfz
+writes a plugin's `plugin.toml` into the shared plugins directory only where its config says so —
+
+```toml
+[plugins.lvim-fuzzy-plugin-preview]
+install = "bundled"      # or the path of a program that answers as the plugin
+[plugins.lvim-fuzzy-plugin-open]
+install = "bundled"
+```
+
+A plugin installed otherwise (`lvim-fuzzy-plugin install`, a copy in the plugins directory) is used as it is.
+
 ### The preview plugins, for other front ends
 
 Every preview that is not plain text — a picture, a video, a PDF, a font, a document, a sound, a directory, a CSV
