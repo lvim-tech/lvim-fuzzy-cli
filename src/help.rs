@@ -32,7 +32,6 @@ SEARCH
 INPUT / OUTPUT
       --read0, --print0   NUL-separated               --ansi, --sync
       --command=CMD *     Source command               --mode=NAME *
-      --remote=R[:PATH] * The files of a remote directory (the remote plugin walks it)
 
 LOOK
       --theme=NAME *      An lvim theme (~/.config/lvim-fuzzy/themes)

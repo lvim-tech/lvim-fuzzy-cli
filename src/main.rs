@@ -38,10 +38,6 @@ fn main() {
     tui::stage("main");
     let argv: Vec<String> = std::env::args().skip(1).collect();
     // started to BE the preview plugin (a process the plugin host runs): answer as it, nothing else
-    lvim_fuzzy_plugin_preview::run_if_asked(&argv);
-    lvim_fuzzy_plugin_open::run_if_asked(&argv);
-    lvim_fuzzy_plugin_remote::run_if_asked(&argv);
-    lvim_fuzzy_plugin_git::run_if_asked(&argv);
     let code = match real_main(&argv) {
         Ok(c) => c,
         Err(e) => {
@@ -378,12 +374,7 @@ fn real_main(argv_in: &[String]) -> Result<i32, String> {
     // `--list` of a plugin: its type → engine map for lfz, with lfz's own `[plugins.<name>]` layer (so after the config)
     if argv.first().map(String::as_str) == Some("open") && argv.get(1).map(String::as_str) == Some("--list") {
         quiet_on_sigpipe();
-        return Ok(plugin_list_cmd("lvim-fuzzy-plugin-open", &lvim_fuzzy_plugin_open::BUILTIN_ENGINES, &argv[2..]));
-    }
-    // the remote plugin's calls for a front end that is not Rust (the Neovim picker, lvim-files)
-    if argv.first().map(String::as_str) == Some("remote") {
-        quiet_on_sigpipe();
-        return Ok(remote_cmd(&argv[1..]));
+        return Ok(plugin_list_cmd("lvim-fuzzy-plugin-open", &argv[2..]));
     }
     if argv.first().map(String::as_str) == Some("preview") && argv.iter().any(|a| a == "--list") {
         quiet_on_sigpipe();
@@ -1097,7 +1088,7 @@ fn filter(opts: &Options) -> Result<i32, String> {
 /// `lvim-fuzzy preview --plugin ...` (the only form: every preview is a plugin's, see below).
 fn preview_cmd(args: &[String]) -> i32 {
     if args.iter().any(|a| a == "--list") {
-        return plugin_list_cmd("lvim-fuzzy-plugin-preview", &lvim_fuzzy_plugin_preview::BUILTIN_ENGINES, args);
+        return plugin_list_cmd("lvim-fuzzy-plugin-preview", args);
     }
     if !args.iter().any(|a| a == "--plugin") {
         eprintln!("usage: lvim-fuzzy-cli preview --plugin [--plugins JSON] [--host NAME] [--size COLSxROWS] [--px WxH] [--skip N] -- PATH");
@@ -1190,7 +1181,7 @@ fn preview_plugin_cmd(args: &[String]) -> i32 {
 }
 
 /// The plugin directories: `~/.config/lvim-plugins` (the one every lvim tool shares), or `$LVIM_PLUGIN_ROOTS`
-/// (`:`-separated; for tests and trying plugins out). The first is where the bundled plugins are written.
+/// (`:`-separated; for tests and trying plugins out). The first is where the plugins are installed.
 pub(crate) fn plugin_roots() -> Vec<std::path::PathBuf> {
     match std::env::var_os("LVIM_PLUGIN_ROOTS") {
         Some(v) => std::env::split_paths(&v).collect(),
@@ -1198,22 +1189,11 @@ pub(crate) fn plugin_roots() -> Vec<std::path::PathBuf> {
     }
 }
 
-/// Install the plugins that ship inside lfz — only the ones its config asks for (`[plugins.<name>] install = "bundled"`, or the path of a
-/// program; see `lvim_fuzzy_plugin::bundled::Install`): the preview, open, remote and git plugins. Nothing is written by itself.
-pub(crate) fn install_plugins(root: &std::path::Path, own: &toml::Table) {
-    use lvim_fuzzy_plugin::bundled::install_configured;
-    install_configured(root, own, "lvim-fuzzy-plugin-preview", lvim_fuzzy_plugin_preview::ensure_installed);
-    install_configured(root, own, "lvim-fuzzy-plugin-open", lvim_fuzzy_plugin_open::ensure_installed);
-    install_configured(root, own, "lvim-fuzzy-plugin-remote", lvim_fuzzy_plugin_remote::ensure_installed);
-    install_configured(root, own, "lvim-fuzzy-plugin-git", lvim_fuzzy_plugin_git::ensure_installed);
-}
-
 /// The plugin host of this program for `host` (`"lvim-fuzzy-cli"`, `"lvim-fuzzy-picker"`): the plugins that ship inside it are installed
 /// first (only the ones the config asks for, see `install_plugins`), then every plugin is loaded, configured with the shared override
 /// files and `own` (the tool's `[plugins.<name>]` tables).
 pub(crate) fn plugin_host(host: &str, own: &toml::Table, wake: std::sync::mpsc::Sender<()>) -> lvim_fuzzy_plugin::Previewer {
     let roots = plugin_roots();
-    install_plugins(&roots[0], own);
     lvim_fuzzy_plugin::Previewer::load(&roots, host, own, wake)
 }
 
@@ -1230,7 +1210,7 @@ pub(crate) fn open_decision(pl: &mut lvim_fuzzy_plugin::Previewer, host: &str, p
 /// `lvim-fuzzy open --list` / `preview --list [--plugins JSON] [--host NAME]`: the type → engine map of a plugin as it is
 /// configured for this tool (the defaults, the shared override file, then lfz's own `[plugins.<name>]`, or the
 /// `--plugins` JSON of another tool), best group first, with a mark for a program that is not installed.
-fn plugin_list_cmd(plugin: &str, builtin: &[(&str, Option<&str>)], args: &[String]) -> i32 {
+fn plugin_list_cmd(plugin: &str, args: &[String]) -> i32 {
     let (mut host, mut over) = ("lvim-fuzzy-cli".to_string(), None);
     let mut it = args.iter();
     while let Some(a) = it.next() {
@@ -1263,113 +1243,11 @@ fn plugin_list_cmd(plugin: &str, builtin: &[(&str, Option<&str>)], args: &[Strin
         return 1;
     }
     println!("{plugin} — for {host}");
-    print!("{}", lvim_fuzzy_plugin::types::list(&pl.host().config_of(plugin), builtin, &lvim_fuzzy_plugin::have));
+    let conf = pl.host().config_of(plugin);
+    let builtin = lvim_fuzzy_plugin::types::builtin_engines(&conf);
+    let builtin: Vec<(&str, Option<&str>)> = builtin.iter().map(|(n, p)| (n.as_str(), p.as_deref())).collect();
+    print!("{}", lvim_fuzzy_plugin::types::list(&conf, &builtin, &lvim_fuzzy_plugin::have));
     0
-}
-
-/// `lvim-fuzzy-cli remote OP [--host NAME] [--plugins JSON] [--remote R] [--path P] [--to T] [--dir] [--limit N] [--local L]`: a
-/// call to the remote plugin, for a front end that is not Rust (the Neovim picker, lvim-files). OP is `remotes`, `list`,
-/// `stat`, `mkdir`, `rm`, `mv`, `cat` — the answer is printed as JSON (the plugin's instruction), exit 1 and
-/// `{"op":"error","text":"…"}` on failure — or `get` / `put` (a transfer between the remote and `--local`: progress as JSON lines,
-/// `{"ok":true}` or `{"error":"…"}` at the end). The plugin's settings are the layers lfz always uses: its defaults, the shared
-/// override file, then lfz's own `[plugins.lvim-fuzzy-plugin-remote]` (or the `--plugins` JSON of another tool).
-fn remote_cmd(args: &[String]) -> i32 {
-    use serde_json::{Value, json};
-    let Some(op) = args.first().cloned() else {
-        eprintln!("usage: lvim-fuzzy-cli remote remotes|list|stat|mkdir|rm|mv|cat|get|put [--remote R] [--path P] [--to T] [--dir] [--limit N] [--local L] [--host NAME] [--plugins JSON]");
-        return 2;
-    };
-    let (mut host, mut over) = ("lvim-fuzzy-cli".to_string(), None);
-    let mut ctx = json!({});
-    let mut local = None;
-    let (mut lines, mut files_only) = (false, false);
-    let mut it = args[1..].iter();
-    while let Some(a) = it.next() {
-        let mut val = |name: &str| -> Option<String> {
-            let v = it.next().cloned();
-            if v.is_none() {
-                eprintln!("lvim-fuzzy-cli: remote: {name} takes a value");
-            }
-            v
-        };
-        match a.as_str() {
-            "--host" => match val("--host") {
-                Some(v) => host = v,
-                None => return 2,
-            },
-            "--plugins" => match val("--plugins").map(|v| serde_json::from_str::<Value>(&v)) {
-                Some(Ok(v)) if v.is_object() => over = Some(v),
-                _ => {
-                    eprintln!("lvim-fuzzy-cli: remote --plugins takes a JSON object: {{\"<plugin>\": {{...}}}}");
-                    return 2;
-                }
-            },
-            "--remote" | "--path" | "--to" => match val(a) {
-                Some(v) => ctx[a.trim_start_matches("--")] = v.into(),
-                None => return 2,
-            },
-            "--limit" => match val("--limit").and_then(|v| v.parse::<u64>().ok()) {
-                Some(v) => ctx["limit"] = v.into(),
-                None => return 2,
-            },
-            "--dir" => ctx["dir"] = true.into(),
-            "--lines" => lines = true,
-            "--files" => files_only = true,
-            "--local" => match val("--local") {
-                Some(v) => local = Some(v),
-                None => return 2,
-            },
-            o => {
-                eprintln!("lvim-fuzzy-cli: remote: unknown option `{o}`");
-                return 2;
-            }
-        }
-    }
-    let own: toml::Table = match over {
-        Some(v) => toml::Value::try_from(&v).ok().and_then(|v| v.as_table().cloned()).unwrap_or_default(),
-        None if host == "lvim-fuzzy-cli" => PLUGINS.get().cloned().unwrap_or_default(),
-        None => toml::Table::new(),
-    };
-    let roots = plugin_roots();
-    install_plugins(&roots[0], &own);
-    let (wake, _rx) = std::sync::mpsc::channel();
-    let mut r = lvim_fuzzy_plugin::Remote::load(&roots, &host, &own, wake);
-    let fail = |text: &str| {
-        println!("{}", json!({"op": "error", "text": text}));
-        1
-    };
-    if !r.available() {
-        return fail(&format!("the plugin `lvim-fuzzy-plugin-remote` is not installed for {host}"));
-    }
-    if op == "get" || op == "put" {
-        let (Some(remote), Some(path), Some(local)) = (ctx["remote"].as_str(), ctx["path"].as_str(), local.as_deref()) else {
-            return fail("get / put need --remote, --path and --local");
-        };
-        let Ok(exe) = std::env::current_exe() else { return fail("cannot find this program") };
-        let mut cmd = lvim_fuzzy_plugin_remote::xfer_command(&exe, &[op.as_str(), remote, path, local], &r.config());
-        return cmd.status().map(|s| s.code().unwrap_or(1)).unwrap_or_else(|e| fail(&e.to_string()));
-    }
-    let code = match r.ask(&op, ctx, std::time::Duration::from_secs(if op == "walk" { 120 } else { 12 })) {
-        // `walk --lines`: the paths one on a line (a finder's items), directories only without --files
-        Ok(v) if op == "walk" && lines => {
-            for e in v["entries"].as_array().into_iter().flatten() {
-                if files_only && e["dir"].as_bool().unwrap_or(false) {
-                    continue;
-                }
-                if let Some(p) = e["path"].as_str() {
-                    println!("{p}{}", if e["dir"].as_bool().unwrap_or(false) { "/" } else { "" });
-                }
-            }
-            0
-        }
-        Ok(v) => {
-            println!("{v}");
-            0
-        }
-        Err(e) => fail(&e),
-    };
-    r.stop();
-    code
 }
 
 /// `lvim-fuzzy open --resolve [--plugins JSON] [--host NAME] [--] PATH`: what the open plugin decided, for a front

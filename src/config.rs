@@ -467,6 +467,14 @@ pub fn load(explicit: Option<&str>) -> Result<Config, Vec<String>> {
                 if !v.is_table() || v.as_table().is_some_and(|t| t.values().any(|x| !x.is_table())) {
                     errs.push(format!("{}: [plugins] must be a table of tables: [plugins.<plugin name>]", at("plugins")));
                 }
+                // a plugin is a program of its own now, installed by its `scripts/install.sh`: the old `install = …` is a mistake
+                if let Some(t) = v.as_table() {
+                    for (name, pv) in t {
+                        if pv.as_table().is_some_and(|p| p.contains_key("install")) {
+                            errs.push(format!("{}: [plugins.{name}] install is gone: a plugin is a program of its own — install it with its `scripts/install.sh` and delete this line", at("plugins")));
+                        }
+                    }
+                }
             }
             "pool" => match v.as_table() {
                 None => errs.push(format!("{}: [pool] must be a table", at("pool"))),

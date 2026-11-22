@@ -302,23 +302,26 @@ cargo build --release
 ./target/release/lvim-fuzzy --help
 ```
 
+## The plugins and where each is used
+
+lfz carries no plugin: each is a program of its own (`scripts/install.sh` of its repository). Only the plugins lfz uses are loaded:
+
+| Plugin | In lfz |
+|---|---|
+| `lvim-fuzzy-plugin-preview` | the preview pane |
+| `lvim-fuzzy-plugin-open` | which program opens a file |
+
+git, devices and remote are lvc's: lfz does not load them.
+
 ## License
 
 BSD-3-Clause
 
-### The plugins that ship inside lfz
+### The plugins lfz uses
 
-The preview, open, remote and git plugins are inside lfz (`lvim-fuzzy-cli --lvim-plugin <name>`), and **nothing installs them by itself**: lfz
-writes a plugin's `plugin.toml` into the shared plugins directory only where its config says so —
-
-```toml
-[plugins.lvim-fuzzy-plugin-preview]
-install = "bundled"      # or the path of a program that answers as the plugin
-[plugins.lvim-fuzzy-plugin-open]
-install = "bundled"
-```
-
-A plugin installed otherwise (`lvim-fuzzy-plugin install`, a copy in the plugins directory) is used as it is.
+lfz carries no plugin: each is a program of its own, installed with its `scripts/install.sh` into `~/.config/lvim-plugins/`. lfz loads two —
+`lvim-fuzzy-plugin-preview` (the preview pane) and `lvim-fuzzy-plugin-open` (which program opens a file). Their settings for lfz go in
+`[plugins.<name>]` of its config; an `install = …` line there is an error.
 
 ### The preview plugins, for other front ends
 

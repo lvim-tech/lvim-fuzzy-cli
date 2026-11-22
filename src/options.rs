@@ -525,7 +525,7 @@ const SPECS: &[Spec] = &[
     // lvim-fuzzy: a real Neovim as the preview
     opt!("preview-nvim", never), req!("nvim"), req!("nvim-appname"), spec!("pool"),
     // lvim-fuzzy: the lvim look
-    req!("preview-order"), req!("scope"), req!("command"), req!("remote"), req!("target"), req!("mode-name"), req!("config"), req!("theme"), req!("title"), req!("title-pos"), req!("bar"),
+    req!("preview-order"), req!("scope"), req!("command"), req!("target"), req!("mode-name"), req!("config"), req!("theme"), req!("title"), req!("title-pos"), req!("bar"),
     // header / footer
     req!("header"), req!("header-lines"),
     // scripting
@@ -1082,17 +1082,6 @@ impl Options {
                 self.scope = if neg { None } else { Some(val().to_string()) };
             }
             "command" => self.command = if neg { None } else { Some(val().to_string()) },
-            // `--remote REMOTE[:PATH]`: the items are the files of a remote directory (the remote plugin walks it)
-            "remote" => {
-                self.command = if neg {
-                    None
-                } else {
-                    let (remote, path) = val().split_once(':').unwrap_or((val(), "/"));
-                    let exe = std::env::current_exe().map(|e| e.to_string_lossy().into_owned()).unwrap_or_else(|_| "lvim-fuzzy-cli".into());
-                    let q = |s: &str| format!("'{}'", s.replace('\'', "'\\''"));
-                    Some(format!("{} remote walk --files --lines --remote {} --path {}", q(&exe), q(remote), q(path)))
-                }
-            }
             "target" => self.target = if neg { None } else { Some(val().to_string()) },
             "mode-name" => self.mode_name = if neg { None } else { Some(val().to_string()) },
             "config" => {
