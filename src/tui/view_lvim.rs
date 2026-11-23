@@ -142,6 +142,7 @@ impl App {
             g2.extend(one("toggle-scope", &label));
         }
         let mut g3 = Vec::new();
+        g3.extend(one("cd", "cd"));
         g3.extend(one("mode-menu", "modes"));
         g3.extend(one("help", "help"));
         g3.extend(one("abort", "close"));

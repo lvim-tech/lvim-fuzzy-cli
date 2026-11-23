@@ -157,6 +157,8 @@ struct App {
     help: Option<Help>,
     menu: Option<menu::Menu>,
     theme_menu: Option<themes::ThemeMenu>,
+    /// Set by Shift-Enter: print the folder of the choice (for `cd "$(lfz)"`) instead of the choice.
+    print_folder: bool,
     /// The lvim theme in use (its file stem).
     theme_name: String,
     spinner: usize,
@@ -286,6 +288,9 @@ impl Term {
         if opts.mouse {
             execute!(out, EnableMouseCapture)?;
         }
+        // Shift-Enter (cd) and the other modified keys reach lfz as themselves, in a terminal that can
+        lvim_fuzzy_ui::keyboard::push(&mut out);
+        out.flush()?;
         if let Some(c) = caret {
             set_caret(&mut out, c)?;
         }
@@ -305,6 +310,7 @@ impl Term {
     }
 
     fn suspend(&mut self) -> std::io::Result<()> {
+        lvim_fuzzy_ui::keyboard::pop(&mut self.out);
         if self.mouse {
             queue!(self.out, DisableMouseCapture)?;
         }
@@ -343,6 +349,7 @@ impl Term {
             queue!(self.out, EnableMouseCapture)?;
         }
         queue!(self.out, cursor::Hide)?;
+        lvim_fuzzy_ui::keyboard::push(&mut self.out);
         if let Some(c) = self.caret {
             set_caret(&mut self.out, c)?;
         }
@@ -483,6 +490,7 @@ pub(crate) fn build_keymap(
             keymap.insert("enter".into(), act("open"));
         }
         keymap.insert("ctrl-y".into(), act("accept"));
+        keymap.insert("shift-enter".into(), act("cd"));
     }
     for b in &opts.binds {
         for (k, acts) in keys::parse_binds(b)? {
@@ -778,6 +786,7 @@ pub fn run(opts: Options) -> Result<i32, String> {
         help: None,
         menu: None,
         theme_menu: None,
+        print_folder: false,
         theme_name: opts
             .theme
             .clone()
@@ -1314,6 +1323,17 @@ impl App {
     }
 
     fn accepted_lines(&self) -> Vec<String> {
+        let lines = self.chosen_lines();
+        // Shift-Enter: the folder of each (of a file, the one it is in)
+        if self.print_folder {
+            let base = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"));
+            return lines.iter().map(|l| lvim_fuzzy_ui::printas::folder(l, &base)).collect();
+        }
+        lines
+    }
+
+    /// The choice as the finder has it (the marked items, or the one under the cursor), before Shift-Enter makes folders of them.
+    fn chosen_lines(&self) -> Vec<String> {
         let items = self.engine.items.read().unwrap();
         if !self.selected.is_empty() {
             return self

@@ -317,6 +317,12 @@ git, devices and remote are lvc's: lfz does not load them.
 
 BSD-3-Clause
 
+### Shift-Enter: cd
+
+`Shift-Enter` prints the folder of the choice (of a file, the folder it is in) and ends, so `cd "$(lfz)"` goes there. It needs a terminal that
+tells Shift-Enter from Enter (kitty and the like; `LVIM_KEYBOARD_PROTOCOL=0` stops lfz asking for it). Another key: `[keys] "alt-o" = "cd"` in the
+config.
+
 ### The plugins lfz uses
 
 lfz carries no plugin: each is a program of its own, installed with its `scripts/install.sh` into `~/.config/lvim-plugins/`. lfz loads two —

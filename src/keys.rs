@@ -176,6 +176,7 @@ pub const ACTIONS: &[&str] = &[
     "rotate-preview-back",
     "toggle-scope",
     "mode-menu",
+    "cd",
     "switch-mode(",
     "theme-menu",
     "toggle-grep-filter",
@@ -377,6 +378,8 @@ pub fn key_name(e: &KeyEvent) -> Option<String> {
             } else if ctrl {
                 // only terminals that report it (kitty keyboard protocol); most send enter
                 "ctrl-enter".into()
+            } else if shift {
+                "shift-enter".into()
             } else {
                 "enter".into()
             }

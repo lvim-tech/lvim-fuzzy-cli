@@ -71,9 +71,10 @@
 # --- Keys ---------------------------------------------------------------------
 # key = "action" ( `lfz --bind-help`). Defaults:
 # F1 help, F2 modes, F3 grep ⇄ filter, F4 scope, F5 themes,
-# Tab select, enter open, ctrl-y print, ctrl-] preview focus, alt-p / alt-P preview side (right, left, up, hidden), alt-e hide / show.
+# Tab select, enter open, ctrl-y print, shift-enter print the folder of the choice, for `cd "$(lfz)"` (needs a terminal that reports shift-enter, like kitty), ctrl-] preview focus, alt-p / alt-P preview side (right, left, up, hidden), alt-e hide / show.
 
 # [keys]
+# "alt-o"  = "cd"                # print the folder of the choice, on another key
 # "ctrl-o" = "execute(less {})"
 # "alt-a"  = "select-all"
 # "alt-d"  = "deselect-all"

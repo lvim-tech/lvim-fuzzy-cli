@@ -803,6 +803,14 @@ impl App {
                     }
                 }
                 "mode-menu" => self.open_menu(),
+                "cd" => {
+                    if self.chosen_lines().is_empty() {
+                        self.toast("nothing chosen".into(), false);
+                    } else {
+                        self.print_folder = true;
+                        return Ok(Some(Outcome::Accept { key: None }));
+                    }
+                }
                 "toggle-raw" | "enable-raw" | "disable-raw" => {
                     self.opts.raw = match a.name.as_str() {
                         "toggle-raw" => !self.opts.raw,
