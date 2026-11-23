@@ -402,6 +402,16 @@ impl App {
         // pattern still marks the rows
         let pat = ((self.search || self.is_live()) && !hq.is_empty())
             .then(|| Pattern::parse(&hq, &crate::match_settings(&self.opts).cfg));
+        // --target names the file of a row where the row shows something else (a shell's completion shows `.zshrc` for ~/.zshrc): the icons follow it
+        let row_paths: Vec<String> = match self.opts.target.clone() {
+            Some(tpl) => (0..rows)
+                .map(|k| match self.hits.get(self.offset + k) {
+                    Some(idx) => self.target_for(idx, &tpl).0,
+                    None => String::new(),
+                })
+                .collect(),
+            None => Vec::new(),
+        };
         let items = self.engine.items.read().unwrap();
         let limit = r.x + r.w;
         let bottom = r.y + r.h;
@@ -479,10 +489,27 @@ impl App {
             // file icon when the item names a file
             // (--with-nth keeps the delimiter that ends the field when more fields follow it: not part of the path)
             let disp = it.display().trim_end();
-            let path_part = disp.split(':').next().unwrap_or(disp);
+            let path_part = match row_paths.get(k).map(String::as_str).filter(|p| !p.is_empty()) {
+                Some(p) => p,
+                None => disp.split(':').next().unwrap_or(disp),
+            };
+            // --target `!`: the row is a command, not a file: the icon of a shell script
+            let is_cmd = path_part == "!";
+            let path_part = if is_cmd { "command.sh" } else { path_part };
             let p = std::path::Path::new(path_part);
-            if !path_part.is_empty()
-                && p.exists()
+            // a --target that names nothing on disk: a red cross where the icon would be (the row keeps its place)
+            let missing = !is_cmd && row_paths.get(k).is_some_and(|t| !t.is_empty()) && !p.exists() && self.opts.icons && !self.opts.hidden.contains("icons");
+            if missing {
+                let image = if self.opts.icon_map.is_empty() { lvim_fuzzy_ui::iconimg::image_named("folder-error") } else { None };
+                if let Some(id) = image {
+                    x = cv.put_image_icon(x, y, id, base.bg, limit);
+                } else {
+                    let fg = l.theme.color("red").or(base.fg);
+                    x = cv.put(x, y, "\u{f057}", Style { fg, bg: base.bg, ..base }, limit);
+                }
+                x = cv.put(x, y, " ", base, limit);
+            } else if !path_part.is_empty()
+                && (is_cmd || p.exists())
                 && let Some((ic, accent)) = crate::lvim::icon_for(&self.opts, path_part, p.is_dir())
             {
                 // a Material image where the terminal takes them (none of the user's own icons set)
