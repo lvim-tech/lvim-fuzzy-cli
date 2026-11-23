@@ -675,14 +675,22 @@ pub fn run(opts: Options) -> Result<i32, String> {
     }
     let (wake_tx, wake_rx) = channel::<()>();
     let engine = Engine::new(crate::match_settings(&opts), wake_tx.clone());
-    let spec = preview_spec(&opts)?;
+    let mut spec = preview_spec(&opts)?;
+    // what this look left last time: its preview shown or not, and on which side (a side the options name wins)
+    let saved = crate::look_state::get(opts.minimal);
+    if opts.preview_window.is_empty()
+        && let Some(side) = saved.side
+    {
+        spec.pos = side;
+    }
     let pv = Preview {
         runner: Some(crate::preview::Runner::new(
             crate::shell_command(&opts),
             wake_tx.clone(),
         )),
         template: opts.preview.clone(),
-        visible: !spec.hidden,
+        // (no word yet: the minimal look without the preview, the full one with it), unless the options hide it
+        visible: !spec.hidden && saved.visible.unwrap_or(!opts.minimal),
         spec,
         cycle: Vec::new(),
         cycle_idx: 0,

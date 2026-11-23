@@ -1087,7 +1087,6 @@ impl Options {
                     for part in ["title", "counter", "search-label", "footer", "preview-title"] {
                         self.hidden.insert(part.to_string());
                     }
-                    self.preview_window.push("hidden".to_string());
                 }
             }
             "hide" | "show" => {
@@ -1292,7 +1291,8 @@ mod tests {
         assert!(!o.sort && o.select_1 && o.exit_0);
         let o = p(&["--minimal"]);
         assert!(o.hidden.contains("title") && o.hidden.contains("footer") && !o.hidden.contains("separator"));
-        assert_eq!(o.preview_window, vec!["hidden".to_string()]);
+        // (whether its preview shows is what the look left last time, not a preview-window word)
+        assert!(o.minimal && o.preview_window.is_empty());
         let o = p(&["--query=x", "-m", "--multi", "--no-multi"]);
         assert!(Options::parse(&["--layout=reverse".to_string()]).is_err());
         assert_eq!(o.multi, None);

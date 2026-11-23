@@ -951,6 +951,7 @@ impl App {
                 "close" => {
                     if self.preview_enabled() {
                         self.pv.visible = false;
+                        crate::look_state::save(self.opts.minimal, false, self.pv.spec.pos);
                     } else {
                         return Ok(Some(Outcome::Abort));
                     }
@@ -1018,7 +1019,13 @@ impl App {
                     self.apply_text(&target, text);
                 }
                 other => {
-                    if !self.preview_action(other, &arg, a.arg.is_some()) {
+                    let (shown, side) = (self.pv.visible, self.pv.spec.pos);
+                    let handled = self.preview_action(other, &arg, a.arg.is_some());
+                    // each look keeps whether the preview was left shown and where: the next one starts that way
+                    if handled && (self.pv.visible != shown || self.pv.spec.pos != side) {
+                        crate::look_state::save(self.opts.minimal, self.pv.visible, self.pv.spec.pos);
+                    }
+                    if !handled {
                         self.toast(format!("action not implemented yet: {other}"), true);
                     }
                 }

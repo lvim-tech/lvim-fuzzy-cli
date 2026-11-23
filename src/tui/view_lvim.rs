@@ -477,7 +477,8 @@ impl App {
                 x = cv.put(x, y, " ", base, limit);
             }
             // file icon when the item names a file
-            let disp = it.display();
+            // (--with-nth keeps the delimiter that ends the field when more fields follow it: not part of the path)
+            let disp = it.display().trim_end();
             let path_part = disp.split(':').next().unwrap_or(disp);
             let p = std::path::Path::new(path_part);
             if !path_part.is_empty()
