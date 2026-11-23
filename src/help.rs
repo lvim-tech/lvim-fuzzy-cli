@@ -89,7 +89,7 @@ SHELL INTEGRATION
 
 KEYS IN THE FINDER *
   F1 keys   F2 modes   F3 grep/filter   F4 filter scope   F5 theme
-  alt-p / alt-P preview side (right, left, up, hidden)
+  alt-p / alt-P preview side (right, left, up, down, hidden)
   alt-e hide / show the preview   ctrl-p show / hide it (any look)
   ctrl-d / ctrl-u half a page, ctrl-f / ctrl-b a page of the preview, while it is shown
   ctrl-] focus the Neovim preview

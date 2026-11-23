@@ -19,30 +19,22 @@ pub(crate) enum Provider {
 /// (-1): the same cycle the Neovim picker has. A preview put at the bottom (`--preview-window=down`) is not on
 /// the cycle: forward from it goes to hidden, back to up.
 pub(crate) fn rotate_side(pos: Pos, visible: bool, dir: i32) -> (Pos, bool) {
-    // 0 right, 1 left, 2 up, 3 hidden; the bottom sits between up and hidden
+    // 0 right, 1 left, 2 up, 3 down (the bottom), 4 hidden
     let at = match (visible, pos) {
-        (false, _) => 3,
+        (false, _) => 4,
         (true, Pos::Right) => 0,
         (true, Pos::Left) => 1,
         (true, Pos::Up) => 2,
         (true, Pos::Down) => 3,
     };
-    let to = if matches!((visible, pos), (true, Pos::Down)) {
-        if dir > 0 { 3 } else { 2 }
-    } else {
-        (at as i32 + dir).rem_euclid(4)
-    };
-    match to {
+    match (at + dir).rem_euclid(5) {
         0 => (Pos::Right, true),
         1 => (Pos::Left, true),
         2 => (Pos::Up, true),
-        _ => (pos_for_hidden(pos), false),
+        3 => (Pos::Down, true),
+        // hiding keeps the side it was on (`toggle-preview` brings it back there)
+        _ => (pos, false),
     }
-}
-
-/// Hiding keeps the side the preview comes back on: the bottom one returns on the right.
-fn pos_for_hidden(pos: Pos) -> Pos {
-    if pos == Pos::Down { Pos::Right } else { pos }
 }
 
 impl Provider {
@@ -1246,30 +1238,28 @@ mod rotate_tests {
     use super::*;
 
     #[test]
-    fn the_cycle_is_right_left_up_hidden() {
+    fn the_cycle_is_right_left_up_down_hidden() {
         let mut at = (Pos::Right, true);
         let mut seen = Vec::new();
-        for _ in 0..4 {
+        for _ in 0..5 {
             at = rotate_side(at.0, at.1, 1);
             seen.push(at);
         }
-        assert_eq!(seen, vec![(Pos::Left, true), (Pos::Up, true), (Pos::Up, false), (Pos::Right, true)]);
+        assert_eq!(seen, vec![(Pos::Left, true), (Pos::Up, true), (Pos::Down, true), (Pos::Down, false), (Pos::Right, true)]);
         // and the other way round
         let mut back = Vec::new();
-        for _ in 0..4 {
+        for _ in 0..5 {
             at = rotate_side(at.0, at.1, -1);
             back.push(at);
         }
-        // (hidden remembers the side it was left from: here the right, which is where it was)
-        assert_eq!(back, vec![(Pos::Right, false), (Pos::Up, true), (Pos::Left, true), (Pos::Right, true)]);
+        // (hidden keeps the side it was hidden on)
+        assert_eq!(back, vec![(Pos::Right, false), (Pos::Down, true), (Pos::Up, true), (Pos::Left, true), (Pos::Right, true)]);
     }
 
     #[test]
-    fn a_bottom_preview_is_off_the_cycle_but_not_lost() {
-        // forward from the bottom: hidden (and it returns on the right); back: up
-        assert_eq!(rotate_side(Pos::Down, true, 1), (Pos::Right, false));
-        assert_eq!(rotate_side(Pos::Down, true, -1), (Pos::Up, true));
-        // hidden returns on the side it was hidden at
+    fn hidden_goes_on_from_its_place_in_the_cycle() {
+        // forward from hidden: the right; back from hidden: the bottom
         assert_eq!(rotate_side(Pos::Left, false, 1), (Pos::Right, true));
+        assert_eq!(rotate_side(Pos::Left, false, -1), (Pos::Down, true));
     }
 }

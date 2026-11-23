@@ -351,11 +351,10 @@ is the default).
 
 ### Where the preview sits
 
-`alt-p` turns the preview through right → left → up → hidden → right, `alt-P` the other way, `alt-e` hides and
+`alt-p` turns the preview through right → left → up → down → hidden → right, `alt-P` the other way, `alt-e` hides and
 shows it (`rotate-preview`, `rotate-preview-back`, `toggle-preview`: bind them to other keys with `--bind`). The
-Neovim picker (lvim-picker) turns its preview through the same places with `<C-n>` / `<C-p>` and hides it with
-`<C-e>`. A preview put at the bottom with `--preview-window=down` is off the cycle: forward from it hides it, back
-goes up.
+Neovim picker (lvim-picker) turns its preview through the same places (but not the bottom: Neovim does not do that) with `<C-n>` / `<C-p>`
+and hides it with `<C-e>`. A hidden preview keeps its side; `toggle-preview` brings it back there. Each look remembers the side and whether it was shown.
 
 ### Run from another full-screen program
 
