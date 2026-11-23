@@ -124,7 +124,7 @@ impl App {
         // shown by configuration, not by what the current item happens to be
         // previewed with: buttons that come and go while typing make the bar flicker
         if self.preview_enabled() {
-            g2.extend(pair("preview-down", "preview-up", "preview"));
+            g2.push(("C-d/u".to_string(), "preview".to_string(), act("preview-half-page-down")));
             if self.pv.order.contains(&pview::Provider::Nvim) && self.pv.oneoff.is_none() {
                 g2.extend(one("toggle-preview-focus", "focus"));
             }
@@ -193,6 +193,8 @@ impl App {
     }
 
     fn draw_title_bar(&self, cv: &mut Canvas, l: &Look, y: u16, w: u16) {
+        // the bar stops before the last column, where the preview's scrollbar stands (that column is the panel's, as the ring is)
+        let w = if self.hidden("scrollbar-right") { w } else { w.saturating_sub(1) };
         cv.fill(Rect { x: 0, y, w, h: 1 }, l.title);
         let counter = if self.hidden("counter") {
             String::new()
@@ -275,17 +277,35 @@ impl App {
             " Search ".to_string()
         };
         let mut x = r.x;
-        if !self.hidden("search-label") {
+        let minimal = self.opts.minimal;
+        if minimal {
+            // the minimal look: a search icon in a box of its own, the field right against the box, and the count of the
+            // matches at its end
+            x = cv.put(x, r.y, " \u{f002} ", l.prompt, limit);
+        } else if !self.hidden("search-label") {
+            // the field right against the badge
             x = cv.put(x, r.y, &badge, l.prompt, limit);
-            x = cv.put(x, r.y, " ", l.panel, limit);
         }
+        let counter = if minimal {
+            let spin = if self.loading { format!("{} ", SPINNER[self.spinner]) } else { String::new() };
+            format!(" {spin}{}/{} ", self.matched_count(), self.engine.items.read().unwrap().len())
+        } else {
+            String::new()
+        };
+        let cw = str_width(&counter) as u16;
+        let full = limit;
+        let limit = limit.saturating_sub(cw);
         let field = Rect {
             x,
             y: r.y,
-            w: limit.saturating_sub(x),
+            w: full.saturating_sub(x),
             h: 1,
         };
         cv.fill(field, l.input);
+        if minimal {
+            // in the box the full look's counter has (the green one of the title bar)
+            cv.put(limit, r.y, &counter, l.counter, full);
+        }
         let fx = x + 1;
         let room = limit.saturating_sub(fx + 1) as usize;
         let mut skip = 0usize;
@@ -610,6 +630,25 @@ impl App {
             }
             y += 1;
         }
+        // the scrollbar: a thumb in the column right of the list (the blank ring), whenever there is more than shows
+        if len > rows
+            && rows > 0
+            && self.opts.scrollbar.as_deref() != Some("")
+            && !self.hidden("scrollbar-left")
+        {
+            let bar = ((rows * rows) / len).max(1);
+            let max_off = len - rows;
+            let pos = self.offset.min(max_off) * (rows - bar) / max_off;
+            let ch = if self.opts.unicode { "┃" } else { "|" };
+            let st = Style {
+                bg: l.panel.bg,
+                ..l.scrollbar
+            };
+            let x = r.x + r.w;
+            for k in 0..bar {
+                cv.put(x, r.y + (pos + k) as u16, ch, st, x + 1);
+            }
+        }
     }
 
     /// The preview's top bar: icon · file name · its directory, on the bar fill.
@@ -692,6 +731,10 @@ impl App {
 
     pub(super) fn draw_lvim(&mut self, term: &mut Term) -> std::io::Result<()> {
         let l = self.look.take().expect("lvim look");
+        // the minimal look has room for a preview only when it asks: the finder grows to what --height allows when the preview opens
+        if self.opts.minimal && self.pv.visible && term.height < term.max_height {
+            term.grow_to(term.max_height)?;
+        }
         // --margin: the finder is drawn into the inner frame, then placed
         let frame = super::view::inset(
             Rect {
@@ -799,7 +842,17 @@ impl App {
                         h: pr.h.saturating_sub(3),
                     },
                 };
-                if inner.h >= 2 && inner.w >= 4 {
+                // (the minimal look has no blank ring: the preview takes the rows of the finder)
+                let inner = if self.opts.minimal {
+                    match spec.pos {
+                        Pos::Right | Pos::Left => Rect { y: pr.y, h: pr.h, ..inner },
+                        Pos::Down => Rect { y: pr.y + 1, h: pr.h.saturating_sub(1), ..inner },
+                        Pos::Up => Rect { y: pr.y, h: pr.h.saturating_sub(1), ..inner },
+                    }
+                } else {
+                    inner
+                };
+                if inner.h >= if self.opts.minimal { 1 } else { 2 } && inner.w >= 4 {
                     let titled = !self.hidden("preview-title");
                     if titled {
                         self.draw_winbar(&mut cv, &l, inner);
@@ -817,11 +870,13 @@ impl App {
                     }
                 }
             }
+            // (the minimal look has no blank ring above and below: the prompt is the first row, the last item the last)
+            let ring = if self.opts.minimal { 0 } else { 1 };
             let list = Rect {
                 x: area.x + 1,
-                y: area.y + 1,
+                y: area.y + ring,
                 w: area.w.saturating_sub(2),
-                h: area.h.saturating_sub(2),
+                h: area.h.saturating_sub(2 * ring),
             };
             if list.h >= 1 && list.w >= 4 {
                 let cx = self.draw_lvim_prompt(&mut cv, &l, Rect { h: 1, ..list });

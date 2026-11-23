@@ -35,6 +35,10 @@
 # icons         = true          # file icons (list and preview title)
 # preview_title = true          # the file name above the preview
 # separator     = true          # the line between the list and the preview
+# scrollbar      = true          # the thumbs of the scrollbars: false takes both away
+# scrollbar_left = true          # the list's only (false: not this one)
+# scrollbar_right = true         # the preview's only (false: not this one)
+# (their colours: the theme's roles `scrollbar` and `preview_scrollbar`, its blue when it has none)
 
 # --- File icons (lvim-icons' set by default) ----------------------------------
 

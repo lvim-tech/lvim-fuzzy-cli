@@ -58,6 +58,14 @@ MODE is any built-in or user mode, or `shell-history`. Keys: `ctrl-x`,
 it (directories after `cd` / `pushd` / `rmdir`; `src/**<Tab>` searches `src/`).
 `LVIM_FUZZY_BIN`, `LVIM_FUZZY_HEIGHT` and `LVIM_FUZZY_POPUP` override at run time.
 
+### The minimal look
+
+`--minimal` is for a small pick inside another tool: the prompt and the list only — a search icon in front of the field and the count of the matches
+(`12/340`) at its end; no title, search label, footer or preview (the line between the list and the preview stays when the preview is shown; `--hide` and `--show` still turn single parts on and off). The preview of the row under the cursor (`Ctrl-P` shows and hides it, in every look; the built-in previewers: a file, a directory, an image…, or
+`--preview=CMD`) opens in the rows of the finder, which grows to what `--height` allows. `--exit-cursor=hidden` keeps
+the cursor hidden when lfz ends, for the tool that embeds it to put it back where it wants it (no flicker on the rows lfz clears). The completion menu of zsh in
+[lvim-fuzzy-zsh](../lvim-fuzzy-zsh) uses it: zsh finds the candidates, lfz shows them.
+
 ## Modes
 
 A mode is a preset: where the items come from, how they are previewed, what the

@@ -354,6 +354,11 @@ impl App {
     }
 
     fn draw_nvim(&mut self, cv: &mut Canvas, inner: Rect) {
+        // the scrollbar thumb (the preview's), from where Neovim says its window is in the buffer
+        let bar_on = self.opts.scrollbar.as_deref() != Some("") && !self.hidden("scrollbar-right");
+        let bar_style = self.preview_bar_style();
+        let bar_char = if self.opts.unicode { "┃" } else { "|" };
+        let bar_x = self.preview_bar_x(inner);
         let Some(n) = self.pv.nvim.as_mut() else {
             return;
         };
@@ -401,6 +406,16 @@ impl App {
                     },
                 );
                 cv.put(x, y, &cell.text, st, inner.x + inner.w);
+            }
+        }
+        let (top, bot, total) = g.view;
+        let shown = bot.saturating_sub(top) + 1;
+        if bar_on && top >= 1 && total > shown && gh > 1 && inner.w >= 2 {
+            let bar = (gh * shown / total).max(1).min(gh);
+            let pos = (top - 1) * (gh - bar) / (total - shown);
+            let x = bar_x;
+            for k in 0..bar {
+                cv.put(x, inner.y + (pos + k).min(gh - 1) as u16, bar_char, bar_style, x + 1);
             }
         }
         self.nvim_cursor = None;
@@ -744,6 +759,7 @@ impl App {
 
     /// `look`: the lvim look while it is out of `self` (the lvim view takes it for the frame).
     pub(super) fn draw_preview(&mut self, cv: &mut Canvas, r: Rect, look: Option<&crate::lvim::Look>) {
+        self.pv.bar_panel_bg = look.map(|l| l.panel.bg);
         let spec = self.preview_spec(self.term_w, self.term_h);
         let th = &self.theme;
         let pfg = th.get(Slot::PreviewFg);
@@ -804,6 +820,7 @@ impl App {
                     self.pv.rows_total = 0;
                 }
             }
+            self.draw_preview_scrollbar(cv, inner, self.pv.rows_total, self.pv.offset);
             return;
         }
         if self.nvim_mode() {
@@ -823,6 +840,7 @@ impl App {
         }
         if self.pv.active == Some(Provider::File) {
             self.draw_file(cv, inner);
+            self.draw_preview_scrollbar(cv, inner, self.preview_lines_total(), self.pv.offset);
             return;
         }
         if self.pv.active.is_none() && self.pv.oneoff.is_none() {
@@ -940,15 +958,20 @@ impl App {
             } else {
                 String::new()
             };
-            let info = format!(" {spin}{}/{} ", off + 1, body_total.max(1));
+            // the rows in view and how many there are: 3-12/12 at the end (the first row alone read as "3 of 12" with the last one on screen)
+            let last = (off + body_h).min(body_total.max(1));
+            let info = format!(" {spin}{}-{}/{} ", off + 1, last, body_total.max(1));
             let iw = str_width(&info) as u16;
             let y = if t { r.y } else { inner.y };
             let x = (r.x + r.w).saturating_sub(iw + if rt { 2 } else { 0 });
+            // in the green of the counter of the title bar (the theme's), else the info colour
+            let fg = look.and_then(|l| l.counter.fg).or(th.get(Slot::Info).fg);
             cv.put(
                 x,
                 y,
                 &info,
                 Style {
+                    fg,
                     bg: pbg.bg,
                     ..th.get(Slot::Info)
                 },
@@ -956,26 +979,66 @@ impl App {
             );
         }
         // scrollbar
-        if body_total > body_h && body_h > 0 && self.opts.scrollbar.as_deref() != Some("") {
+        if body_total > body_h
+            && body_h > 0
+            && self.opts.scrollbar.as_deref() != Some("")
+            && !self.hidden("scrollbar-right")
+        {
             let bar = ((body_h * body_h) / body_total).max(1);
             let pos = if max_off == 0 {
                 0
             } else {
                 off * (body_h - bar) / max_off
             };
-            let x = if rt {
+            let x = if rt && self.pv.bar_panel_bg.is_none() {
                 r.x + r.w - 1
             } else {
-                inner.x + inner.w - 1
+                self.preview_bar_x(inner)
             };
-            let st = Style {
-                bg: pbg.bg,
-                ..th.get(Slot::PreviewScrollbar)
-            };
+            let st = self.preview_bar_style();
             let ch = if self.opts.unicode { "┃" } else { "|" };
             for k in 0..bar {
                 cv.put(x, inner.y + (hdr + pos + k) as u16, ch, st, x + 1);
             }
+        }
+    }
+
+    /// The preview's thumb: in the lvim look on the panel's background (it stands in the blank ring outside the preview, as the list's does), else on
+    /// the preview's.
+    fn preview_bar_style(&self) -> Style {
+        let bg = self.pv.bar_panel_bg.unwrap_or(self.theme.get(Slot::PreviewBg).bg);
+        Style {
+            bg,
+            ..self.theme.get(Slot::PreviewScrollbar)
+        }
+    }
+
+    /// The column of the preview's scrollbar: in the lvim look the blank one just outside the content (as the list's is, outside its rows), so both
+    /// stand outside their boxes; in the plain look the last column of the content.
+    fn preview_bar_x(&self, inner: Rect) -> u16 {
+        if self.pv.bar_panel_bg.is_some() { inner.x + inner.w } else { inner.x + inner.w - 1 }
+    }
+
+    /// The thumb at the right edge of the preview, whenever the content is longer than the pane (every provider but Neovim, which draws its own).
+    fn draw_preview_scrollbar(&self, cv: &mut Canvas, inner: Rect, total: usize, offset: usize) {
+        let body_h = inner.h as usize;
+        if self.opts.scrollbar.as_deref() == Some("")
+            || self.hidden("scrollbar-right")
+            || body_h == 0
+            || total <= body_h
+            || inner.w < 2
+        {
+            return;
+        }
+        let max_off = total - body_h;
+        let off = if offset == usize::MAX { 0 } else { offset.min(max_off) };
+        let bar = ((body_h * body_h) / total).max(1);
+        let pos = off * (body_h - bar) / max_off;
+        let st = self.preview_bar_style();
+        let ch = if self.opts.unicode { "┃" } else { "|" };
+        let x = self.preview_bar_x(inner);
+        for k in 0..bar {
+            cv.put(x, inner.y + (pos + k) as u16, ch, st, x + 1);
         }
     }
 

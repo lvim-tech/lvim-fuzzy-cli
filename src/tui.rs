@@ -217,6 +217,9 @@ pub(super) struct Preview {
     /// What the plugin provider shows, and how many rows it has (for scrolling).
     list_target: Option<std::path::PathBuf>,
     rows_total: usize,
+    /// Set as the preview is drawn: in the lvim look (the look is passed, `self.look` is taken while the frame is drawn) the panel's background, which the
+    /// preview's scrollbar stands on in the blank column outside the preview; None in the plain look.
+    bar_panel_bg: Option<Option<crossterm::style::Color>>,
     /// The preview plugins (None = none installed), the request in flight (ticket, file) and the answers so far.
     plug: Option<lvim_fuzzy_plugin::Previewer>,
     /// The plugin host the open plugin is asked through (Enter on a file); made at the first Enter.
@@ -235,9 +238,28 @@ struct Term {
     mouse: bool,
     /// The lvim caret colour (a thin bar), restored on exit.
     caret: Option<Color>,
+    /// The height an inline finder may grow to when it needs room (the preview opened in the minimal look): what `--height` allows.
+    max_height: u16,
+    /// `--exit-cursor=hidden`.
+    keep_cursor_hidden: bool,
 }
 
 impl Term {
+    /// Make the inline finder taller: the lines it needs are made below it (the terminal scrolls when it is at the bottom).
+    fn grow_to(&mut self, h: u16) -> std::io::Result<()> {
+        if self.fullscreen || h <= self.height {
+            return Ok(());
+        }
+        self.pos.goto(&mut self.out, 0, self.height.saturating_sub(1))?;
+        for _ in self.height..h {
+            self.out.write_all(b"\n")?;
+        }
+        self.pos.row = h - 1;
+        self.height = h;
+        self.prev = None;
+        self.out.flush()
+    }
+
     fn open(opts: &Options, needed: Option<u16>, caret: Option<Color>) -> std::io::Result<Term> {
         let tty = OpenOptions::new().read(true).write(true).open("/dev/tty")?;
         let mut out = BufWriter::with_capacity(1 << 16, tty);
@@ -247,6 +269,7 @@ impl Term {
             s => s,
         };
         let fullscreen = opts.height.is_none();
+        let mut max_height = rows;
         let height = match opts.height {
             None => rows,
             Some(h) => {
@@ -259,6 +282,7 @@ impl Term {
                 if h.negative {
                     v = rows.saturating_sub(h.value);
                 }
+                max_height = v.clamp(1, rows);
                 if h.adaptive
                     && let Some(n) = needed
                 {
@@ -306,10 +330,14 @@ impl Term {
             },
             mouse: opts.mouse,
             caret,
+            max_height,
+            keep_cursor_hidden: opts.exit_cursor_hidden,
         })
     }
 
     fn suspend(&mut self) -> std::io::Result<()> {
+        // the cursor is out of sight while the finder is taken down (it would be seen on the rows it clears)
+        queue!(self.out, cursor::Hide)?;
         lvim_fuzzy_ui::keyboard::pop(&mut self.out);
         if self.mouse {
             queue!(self.out, DisableMouseCapture)?;
@@ -323,7 +351,9 @@ impl Term {
         if self.fullscreen && !keeps_screen() {
             queue!(self.out, terminal::LeaveAlternateScreen)?;
         }
-        queue!(self.out, cursor::Show)?;
+        if !self.keep_cursor_hidden {
+            queue!(self.out, cursor::Show)?;
+        }
         self.out.flush()?;
         terminal::disable_raw_mode()?;
         Ok(())
@@ -450,7 +480,8 @@ fn lvim_slots(t: &mut Theme, l: &crate::lvim::Look) {
     t.set(Slot::Spinner, fg_only(l.counter));
     t.set(Slot::Border, fg_only(l.border));
     t.set(Slot::Separator, fg_only(l.border));
-    t.set(Slot::Scrollbar, fg_only(l.border));
+    t.set(Slot::Scrollbar, fg_only(l.scrollbar));
+    t.set(Slot::PreviewScrollbar, fg_only(l.preview_scrollbar));
     t.set(Slot::Label, fg_only(l.title));
     t.set(Slot::Header, fg_only(l.title));
     t.set(Slot::Ghost, fg_only(l.count));
@@ -679,6 +710,7 @@ pub fn run(opts: Options) -> Result<i32, String> {
         plug_skip: 0,
         list_target: None,
         rows_total: 0,
+        bar_panel_bg: None,
         plug: preview_plugins(wake_tx.clone()),
         opener: None,
         plug_wait: None,
@@ -1080,6 +1112,8 @@ impl App {
             },
             mouse: false,
             caret: None,
+            max_height: h,
+            keep_cursor_hidden: false,
         };
         while self.loading {
             match feed_rx.recv() {
@@ -1182,7 +1216,8 @@ impl App {
 
     fn needed_height(&self) -> u16 {
         let items = self.engine.items.read().unwrap().len();
-        let chrome = 2 + self.header.len() + self.header_items.len();
+        // the prompt row, and above and below it the blank ring (the minimal look has none)
+        let chrome = if self.opts.minimal { 1 } else { 2 } + self.header.len() + self.header_items.len();
         (items + chrome).min(u16::MAX as usize) as u16
     }
 
@@ -1653,6 +1688,26 @@ impl App {
                 }
                 if expect.iter().any(|e| *e == name) {
                     return Ok(Some(Outcome::Accept { key: Some(name) }));
+                }
+                // while the preview is shown, ctrl-d / ctrl-u scroll it by half a page and ctrl-f / ctrl-b by a page (vim's keys): the keys
+                // that edit the query otherwise (delete, clear, forward, back), unless they are bound to something else
+                if self.preview_enabled() {
+                    let (editing, scroll) = match name.as_str() {
+                        "ctrl-d" => ("delete-char/eof", "preview-half-page-down"),
+                        "ctrl-u" => ("unix-line-discard", "preview-half-page-up"),
+                        "ctrl-f" => ("forward-char", "preview-page-down"),
+                        "ctrl-b" => ("backward-char", "preview-page-up"),
+                        _ => ("", ""),
+                    };
+                    if !scroll.is_empty()
+                        && self.keymap.get(&name).is_some_and(|a| a.len() == 1 && a[0].name == editing)
+                    {
+                        let acts = vec![keys::Action {
+                            name: scroll.into(),
+                            arg: None,
+                        }];
+                        return self.run_actions(&acts, Some(term));
+                    }
                 }
                 if let Some(acts) = self.keymap.get(&name).cloned() {
                     return self.run_actions(&acts, Some(term));

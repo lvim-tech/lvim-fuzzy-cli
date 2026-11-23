@@ -41,7 +41,15 @@ LOOK
       --popup[=OPTS] *    Floating pane in Zellij / tmux (--tmux is an alias)
       --margin=TRBL       TRBL | TB,RL | T,RL,B | T,R,B,L
       --hide=PARTS *      --show=PARTS *  title, counter, search-label, footer,
-                          icons, preview-title, separator
+                          icons, preview-title, separator, scrollbar (both),
+                          scrollbar-left (the list's), scrollbar-right (the
+                          preview's)
+      --exit-cursor=C *   hidden: the cursor stays hidden when lfz ends (a tool that
+                          embeds lfz puts it back itself) | show (default)
+      --minimal *         The prompt and the list only (for a pick inside a tool): a
+                          search icon, the count of the matches at the end of the
+                          prompt; no title, label, footer or preview (the line
+                          between the list and a shown preview stays)
 
 LIST
   -m, --multi[=MAX]       Multi-select                  --cycle, --raw
@@ -82,7 +90,8 @@ SHELL INTEGRATION
 KEYS IN THE FINDER *
   F1 keys   F2 modes   F3 grep/filter   F4 filter scope   F5 theme
   alt-p / alt-P preview side (right, left, up, hidden)
-  alt-e hide / show the preview
+  alt-e hide / show the preview   ctrl-p show / hide it (any look)
+  ctrl-d / ctrl-u half a page, ctrl-f / ctrl-b a page of the preview, while it is shown
   ctrl-] focus the Neovim preview
 
 FILES AND ENVIRONMENT

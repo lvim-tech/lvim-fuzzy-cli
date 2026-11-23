@@ -576,9 +576,11 @@ pub fn default_keymap() -> KeyMap {
     for k in ["ctrl-j", "ctrl-n", "down"] {
         b(k, "down");
     }
-    for k in ["ctrl-k", "ctrl-p", "up"] {
+    for k in ["ctrl-k", "up"] {
         b(k, "up");
     }
+    // (fzf has ctrl-p as up: here ctrl-p is the preview of the row, shown and hidden; ctrl-k and the arrow move up)
+    b("ctrl-p", "toggle-preview");
     b("tab", "toggle+down");
     b("shift-tab", "toggle+up");
     b("ctrl-a", "beginning-of-line");
@@ -606,8 +608,6 @@ pub fn default_keymap() -> KeyMap {
     b("ctrl-l", "clear-screen");
     b("page-up", "page-up");
     b("page-down", "page-down");
-    b("shift-up", "preview-up");
-    b("shift-down", "preview-down");
     b("scroll-up", "up");
     b("scroll-down", "down");
     b("shift-scroll-up", "preview-up");

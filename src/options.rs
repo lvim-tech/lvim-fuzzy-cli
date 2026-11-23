@@ -8,7 +8,7 @@ use crate::fields::{self, Delimiter, Range};
 use crate::matcher::{CaseMode, Scheme, Tiebreak};
 
 /// The parts of the screen --hide / --show / [show] name.
-pub const PARTS: [&str; 7] = [
+pub const PARTS: [&str; 10] = [
     "title",
     "counter",
     "search-label",
@@ -16,6 +16,10 @@ pub const PARTS: [&str; 7] = [
     "icons",
     "preview-title",
     "separator",
+    // the thumbs of the scrollbars: both, the list's (left), the preview's (right)
+    "scrollbar",
+    "scrollbar-left",
+    "scrollbar-right",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -142,6 +146,10 @@ pub struct Options {
     pub filepath_word: bool,
     pub preview: Option<String>,
     pub preview_window: Vec<String>,
+    /// `--minimal`: the prompt row has a search icon and the count of the matches, and the frame around it is left out.
+    pub minimal: bool,
+    /// `--exit-cursor=hidden`: the cursor stays hidden when the finder ends (the tool that started it puts it back where it wants it).
+    pub exit_cursor_hidden: bool,
     pub preview_nvim: Option<String>,
     pub preview_order: Option<Vec<String>>,
     /// Filter scope for grep results: line / path / file / all.
@@ -270,6 +278,8 @@ impl Default for Options {
             filepath_word: false,
             preview: None,
             preview_window: Vec::new(),
+            minimal: false,
+            exit_cursor_hidden: false,
             preview_nvim: None,
             preview_order: None,
             scope: None,
@@ -293,6 +303,7 @@ impl Default for Options {
             target: None,
             mode_name: None,
             config: None,
+            // (the scrollbars are shown: `--hide=scrollbar`, [show] scrollbar = false takes them away)
             hidden: Default::default(),
             theme: None,
             title: None,
@@ -519,7 +530,7 @@ const SPECS: &[Spec] = &[
     // input section
     spec!("input"), req!("prompt"), req!("ghost"), req!("popup-border"), req!("editor"), req!("open"),
     req!("typos"), req!("exact-window"), spec!("filepath-word"), req!("empty-text"), req!("loading-text"),
-    req!("hide"), req!("show"), req!("grep-pattern"), spec!("icons"), req!("icon"), req!("icon-mode"), spec!("zellij-images"),
+    req!("hide"), req!("show"), spec!("minimal"), req!("exit-cursor"), req!("grep-pattern"), spec!("icons"), req!("icon"), req!("icon-mode"), spec!("zellij-images"),
     // preview
     req!("preview"), req!("preview-window"), req!("preview-wrap-sign"),
     // lvim-fuzzy: a real Neovim as the preview
@@ -1063,15 +1074,35 @@ impl Options {
                 }
                 self.preview_order = if neg { None } else { Some(list) };
             }
+            // the minimal look, for a small pick inside another tool (a shell's completion): the prompt and the list, no title, counter, label, footer
+            // or preview (the line between the list and the preview stays, when the preview is shown)
+            "exit-cursor" => match val() {
+                "hidden" => self.exit_cursor_hidden = !neg,
+                "show" => self.exit_cursor_hidden = false,
+                other => return Err(format!("invalid --exit-cursor: {other} (hidden, show)")),
+            },
+            "minimal" => {
+                self.minimal = !neg;
+                if !neg {
+                    for part in ["title", "counter", "search-label", "footer", "preview-title"] {
+                        self.hidden.insert(part.to_string());
+                    }
+                    self.preview_window.push("hidden".to_string());
+                }
+            }
             "hide" | "show" => {
                 for part in val().split(',').map(str::trim).filter(|p| !p.is_empty()) {
                     if !PARTS.contains(&part) {
                         return Err(format!("invalid --{n} part: {part} ({})", PARTS.join(", ")));
                     }
-                    if (n == "hide") != neg {
-                        self.hidden.insert(part.to_string());
-                    } else {
-                        self.hidden.remove(part);
+                    // `scrollbar` is both of them
+                    let parts: &[&str] = if part == "scrollbar" { &["scrollbar-left", "scrollbar-right"] } else { &[part] };
+                    for p in parts {
+                        if (n == "hide") != neg {
+                            self.hidden.insert(p.to_string());
+                        } else {
+                            self.hidden.remove(*p);
+                        }
                     }
                 }
             }
@@ -1259,6 +1290,9 @@ mod tests {
         let o = p(&["-m", "--no-sort", "-d:", "-n2", "-1", "-0"]);
         assert_eq!(o.multi, Some(0));
         assert!(!o.sort && o.select_1 && o.exit_0);
+        let o = p(&["--minimal"]);
+        assert!(o.hidden.contains("title") && o.hidden.contains("footer") && !o.hidden.contains("separator"));
+        assert_eq!(o.preview_window, vec!["hidden".to_string()]);
         let o = p(&["--query=x", "-m", "--multi", "--no-multi"]);
         assert!(Options::parse(&["--layout=reverse".to_string()]).is_err());
         assert_eq!(o.multi, None);

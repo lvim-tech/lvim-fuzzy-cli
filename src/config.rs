@@ -146,7 +146,7 @@ fn look_icons(
 }
 
 /// `[show]`: PART = true / false (title, counter, search-label, footer,
-/// icons, preview-title, separator, scrollbar).
+/// icons, preview-title, separator, scrollbar, scrollbar-left, scrollbar-right).
 fn look_show(
     v: &toml::Value,
     what: &str,
@@ -709,10 +709,10 @@ scope = "line"
             crate::lvim::icon_for(&o, "a.rs", false).map(|i| i.0),
             Some("R")
         );
-        let e = load_text("style = \"full\"\n[show]\nscrollbar = false\n")
+        let e = load_text("style = \"full\"\n[show]\nbogus = false\n")
             .unwrap_err()
             .join("\n");
-        assert!(e.contains("style") && e.contains("show.scrollbar"), "{e}");
+        assert!(e.contains("style") && e.contains("show.bogus"), "{e}");
     }
 
     #[test]
