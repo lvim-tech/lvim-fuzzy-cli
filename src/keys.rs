@@ -112,6 +112,7 @@ pub const ACTIONS: &[&str] = &[
     "reload(",
     "reload-sync(",
     "replace-query",
+    "row-tip",
     "search(",
     "select",
     "select-all",
@@ -581,6 +582,8 @@ pub fn default_keymap() -> KeyMap {
     }
     // (fzf has ctrl-p as up: here ctrl-p is the preview of the row, shown and hidden; ctrl-k and the arrow move up)
     b("ctrl-p", "toggle-preview");
+    // (the whole text of the row, when it is cut)
+    b("alt-i", "row-tip");
     b("tab", "toggle+down");
     b("shift-tab", "toggle+up");
     b("ctrl-a", "beginning-of-line");

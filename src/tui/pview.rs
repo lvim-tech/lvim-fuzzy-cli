@@ -447,6 +447,7 @@ impl App {
             self.pv.rect = None;
             return None;
         }
+        self.pv.area = Some(*area);
         let spec = self.preview_spec(area.w, area.h);
         let dim = match spec.pos {
             Pos::Left | Pos::Right => area.w,

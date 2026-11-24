@@ -271,20 +271,25 @@ impl App {
     /// Prompt row: the badge, a gap, the input field. Returns the cursor column.
     fn draw_lvim_prompt(&self, cv: &mut Canvas, l: &Look, r: Rect) -> u16 {
         let limit = r.x + r.w;
+        let field_st = lvim_fuzzy_ui::lvim::search_field(l);
         let badge = if self.opts.prompt != "> " {
             format!(" {} ", self.opts.prompt.trim_end())
         } else {
-            " Search ".to_string()
+            " \u{f002} ".to_string()
         };
         let mut x = r.x;
         let minimal = self.opts.minimal;
         if minimal {
             // the minimal look: a search icon in a box of its own, the field right against the box, and the count of the
             // matches at its end
-            x = cv.put(x, r.y, " \u{f002} ", l.prompt, limit);
+            x = cv.put_search_badge(x, r.y, lvim_fuzzy_ui::lvim::search_badge_style(l), limit);
         } else if !self.hidden("search-label") {
             // the field right against the badge
-            x = cv.put(x, r.y, &badge, l.prompt, limit);
+            x = if self.opts.prompt == "> " {
+                cv.put_search_badge(x, r.y, lvim_fuzzy_ui::lvim::search_badge_style(l), limit)
+            } else {
+                cv.put(x, r.y, &badge, l.prompt, limit)
+            };
         }
         let counter = if minimal {
             let spin = if self.loading { format!("{} ", SPINNER[self.spinner]) } else { String::new() };
@@ -301,12 +306,13 @@ impl App {
             w: full.saturating_sub(x),
             h: 1,
         };
-        cv.fill(field, l.input);
+        cv.fill(field, field_st);
         if minimal {
             // in the box the full look's counter has (the green one of the title bar)
             cv.put(limit, r.y, &counter, l.counter, full);
         }
-        let fx = x + 1;
+        // the typed text starts right where the badge ends — where the names of the rows below start
+        let fx = x;
         let room = limit.saturating_sub(fx + 1) as usize;
         let mut skip = 0usize;
         while skip < self.qcur
@@ -325,7 +331,8 @@ impl App {
                 r.y,
                 &truncate(ghost, room),
                 Style {
-                    bg: l.input.bg,
+                    fg: l.prompt.fg,
+                    bg: field_st.bg,
                     ..l.count
                 },
                 limit,
@@ -333,10 +340,10 @@ impl App {
         } else {
             let shown: String = self.query[skip..].iter().collect();
             let st = if self.search {
-                l.input
+                field_st
             } else {
                 Style {
-                    bg: l.input.bg,
+                    bg: field_st.bg,
                     ..l.count
                 }
             };
@@ -656,6 +663,15 @@ impl App {
                 }
                 x = cv.put(x, y, ch.encode_utf8(&mut buf), st, limit);
             }
+            // text that is cut at the end shows it with an ellipsis (`row-tip` shows all of it)
+            if !self.opts.wrap && !disp.contains('\n') {
+                let shown = lock_w
+                    + usize::from(start > lock)
+                    + widths[start.min(widths.len())..].iter().sum::<usize>();
+                if shown > room && limit > r.x {
+                    cv.put(limit - 1, y, clip, Style { bg: base.bg, ..l.count }, limit);
+                }
+            }
             y += 1;
         }
         // the scrollbar: a thumb in the column right of the list (the blank ring), whenever there is more than shows
@@ -676,6 +692,44 @@ impl App {
             for k in 0..bar {
                 cv.put(x, r.y + (pos + k) as u16, ch, st, x + 1);
             }
+        }
+    }
+
+    /// `row-tip`: the whole text of the row under the cursor on a ribbon over the list, above the row or under it (where all of it fits),
+    /// in as many lines as it takes.
+    fn draw_row_tip(&self, cv: &mut Canvas, l: &Look, r: Rect) {
+        let Some(&(row_y, _)) = self.row_map.iter().find(|(_, h)| *h == self.cursor) else { return };
+        let text: String = {
+            let items = self.engine.items.read().unwrap();
+            let Some(it) = self.hits.get(self.cursor).and_then(|i| items.get(i as usize)) else { return };
+            it.display().trim_end().chars().map(|c| if c == '\t' { ' ' } else { c }).filter(|c| !c.is_control()).collect()
+        };
+        if text.is_empty() || r.w < 8 {
+            return;
+        }
+        let inner = (r.w as usize).saturating_sub(2).max(4);
+        let mut lines: Vec<String> = Vec::new();
+        let mut cur = String::new();
+        for c in text.chars() {
+            if str_width(&cur) + canvas::char_width(c) > inner {
+                lines.push(std::mem::take(&mut cur));
+            }
+            cur.push(c);
+        }
+        if !cur.is_empty() {
+            lines.push(cur);
+        }
+        let above = row_y.saturating_sub(r.y);
+        let below = (r.y + r.h).saturating_sub(row_y + 1);
+        let want = lines.len() as u16;
+        let up = if above >= want { true } else if below >= want { false } else { above >= below };
+        lines.truncate(if up { above } else { below }.max(1) as usize);
+        let bh = lines.len() as u16;
+        let y0 = if up { row_y - bh } else { row_y + 1 };
+        for (k, line) in lines.iter().enumerate() {
+            let y = y0 + k as u16;
+            cv.fill(Rect { x: r.x, y, w: r.w, h: 1 }, l.input);
+            cv.put(r.x + 1, y, line, l.input, r.x + r.w);
         }
     }
 
@@ -945,6 +999,9 @@ impl App {
                     ..list
                 };
                 self.draw_lvim_rows(&mut cv, &l, rows);
+                if self.tip {
+                    self.draw_row_tip(&mut cv, &l, rows);
+                }
             }
             if let Some(y) = bar_y {
                 self.draw_footer(&mut cv, &l, y, w);

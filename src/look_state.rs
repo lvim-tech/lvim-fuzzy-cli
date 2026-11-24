@@ -25,6 +25,8 @@ fn key(minimal: bool) -> &'static str {
 pub struct Saved {
     pub visible: Option<bool>,
     pub side: Option<Pos>,
+    /// the preview's share of the width (or height), in percent
+    pub size: Option<u16>,
 }
 
 fn side_name(p: Pos) -> &'static str {
@@ -57,13 +59,14 @@ pub fn get(minimal: bool) -> Saved {
         return Saved {
             visible: w.next().map(|s| s == "on"),
             side: w.next().and_then(side_of),
+            size: w.next().and_then(|s| s.parse().ok()),
         };
     }
     Saved::default()
 }
 
 /// Remember it for this look (the other look's line stays). A file that cannot be written is no error: the preview just starts the old way.
-pub fn save(minimal: bool, visible: bool, side: Pos) {
+pub fn save(minimal: bool, visible: bool, side: Pos, size: Option<u16>) {
     let p = path();
     let other = key(!minimal);
     let keep = std::fs::read_to_string(&p)
@@ -72,7 +75,11 @@ pub fn save(minimal: bool, visible: bool, side: Pos) {
     if let Some(d) = p.parent() {
         let _ = std::fs::create_dir_all(d);
     }
-    let mut text = format!("{}={} {}\n", key(minimal), if visible { "on" } else { "off" }, side_name(side));
+    let mut text = format!("{}={} {}", key(minimal), if visible { "on" } else { "off" }, side_name(side));
+    if let Some(n) = size {
+        text.push_str(&format!(" {n}"));
+    }
+    text.push('\n');
     if let Some(l) = keep {
         text.push_str(&l);
         text.push('\n');

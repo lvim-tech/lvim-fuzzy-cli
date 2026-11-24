@@ -15,6 +15,7 @@ use crossterm::style::Color;
 use crossterm::{cursor, execute, queue, terminal};
 
 use crate::canvas::{self, Canvas, Positioner, Rect, str_width, truncate};
+use crate::preview::Pos;
 use crate::engine::{Engine, Hits};
 use crate::item::ItemBuilder;
 use crate::keys::{self, Action, KeyMap};
@@ -165,6 +166,9 @@ struct App {
     load_fired: bool,
     temps: Vec<std::path::PathBuf>,
     last_click: Option<Instant>,
+    /// `row-tip`: the whole text of the row under the cursor is shown over the list
+    tip: bool,
+    tip_was: bool,
     // preview
     pv: Preview,
     term_w: u16,
@@ -191,6 +195,9 @@ pub(super) struct Preview {
     offset: usize,
     label: String,
     rect: Option<Rect>,
+    /// the area the preview was split off (its size is a share of it), and whether its edge is being dragged
+    area: Option<Rect>,
+    drag: bool,
     /// Inner size of the last drawn preview (cols, lines).
     size: (u16, u16),
     force: bool,
@@ -683,6 +690,12 @@ pub fn run(opts: Options) -> Result<i32, String> {
     {
         spec.pos = side;
     }
+    if opts.preview_window.is_empty()
+        && let Some(n) = saved.size
+    {
+        spec.percent = true;
+        spec.size = n.clamp(10, 90);
+    }
     let pv = Preview {
         runner: Some(crate::preview::Runner::new(
             crate::shell_command(&opts),
@@ -700,6 +713,8 @@ pub fn run(opts: Options) -> Result<i32, String> {
         offset: 0,
         label: String::new(),
         rect: None,
+        area: None,
+        drag: false,
         size: (0, 0),
         force: false,
         oneoff: None,
@@ -835,6 +850,8 @@ pub fn run(opts: Options) -> Result<i32, String> {
         load_fired: false,
         temps: Vec::new(),
         last_click: None,
+        tip: false,
+        tip_was: false,
         pv,
         term_w: 0,
         term_h: 0,
@@ -1647,6 +1664,8 @@ impl App {
                 if k.kind == KeyEventKind::Release {
                     return Ok(None);
                 }
+                // a key hides the tooltip (the key that shows it toggles from what it was)
+                self.tip_was = std::mem::take(&mut self.tip);
                 let Some(name) = keys::key_name(&k) else {
                     return Ok(None);
                 };
@@ -1760,6 +1779,45 @@ impl App {
                         }
                     }
                     return Ok(None);
+                }
+                // the edge between the list and the preview is dragged with the left button; where it is left is kept
+                if let Some(a) = self.pv.area
+                    && let Some(r) = self.pv.rect
+                {
+                    use crossterm::event::{MouseButton, MouseEventKind as K};
+                    let pos = self.pv.spec.pos;
+                    let near = |v: u16, edge: u16| v + 1 >= edge && v <= edge;
+                    let on_edge = match pos {
+                        Pos::Right => near(m.column, r.x) && m.row >= r.y && m.row < r.y + r.h,
+                        Pos::Left => near(m.column, r.x + r.w) && m.row >= r.y && m.row < r.y + r.h,
+                        Pos::Down => near(m.row, r.y) && m.column >= r.x && m.column < r.x + r.w,
+                        Pos::Up => near(m.row, r.y + r.h) && m.column >= r.x && m.column < r.x + r.w,
+                    };
+                    match m.kind {
+                        K::Down(MouseButton::Left) if on_edge => {
+                            self.pv.drag = true;
+                            return Ok(None);
+                        }
+                        K::Drag(MouseButton::Left) if self.pv.drag => {
+                            let (total, from_far) = match pos {
+                                Pos::Right => (a.w, (a.x + a.w).saturating_sub(m.column)),
+                                Pos::Left => (a.w, m.column.saturating_sub(a.x)),
+                                Pos::Down => (a.h, (a.y + a.h).saturating_sub(m.row)),
+                                Pos::Up => (a.h, m.row.saturating_sub(a.y)),
+                            };
+                            let pct = (from_far as u32 * 100 / total.max(1) as u32).clamp(15, 85) as u16;
+                            self.pv.spec.percent = true;
+                            self.pv.spec.size = pct;
+                            self.pv.spec.alt = None;
+                            return Ok(None);
+                        }
+                        K::Up(MouseButton::Left) if self.pv.drag => {
+                            self.pv.drag = false;
+                            crate::look_state::save(self.opts.minimal, self.pv.visible, pos, Some(self.pv.spec.size));
+                            return Ok(None);
+                        }
+                        _ => {}
+                    }
                 }
                 // wheel over the preview scrolls the preview
                 if let Some(r) = self.pv.rect

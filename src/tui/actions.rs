@@ -942,6 +942,8 @@ impl App {
                     }
                     self.request();
                 }
+                // the whole text of the row under the cursor, as a tooltip over the list (any key hides it)
+                "row-tip" => self.tip = !self.tip_was,
                 "hide-header" => self.header_hidden = true,
                 "show-header" => self.header_hidden = false,
                 "toggle-header" => self.header_hidden = !self.header_hidden,
@@ -951,7 +953,7 @@ impl App {
                 "close" => {
                     if self.preview_enabled() {
                         self.pv.visible = false;
-                        crate::look_state::save(self.opts.minimal, false, self.pv.spec.pos);
+                        crate::look_state::save(self.opts.minimal, false, self.pv.spec.pos, self.pv.spec.percent.then_some(self.pv.spec.size));
                     } else {
                         return Ok(Some(Outcome::Abort));
                     }
@@ -1023,7 +1025,7 @@ impl App {
                     let handled = self.preview_action(other, &arg, a.arg.is_some());
                     // each look keeps whether the preview was left shown and where: the next one starts that way
                     if handled && (self.pv.visible != shown || self.pv.spec.pos != side) {
-                        crate::look_state::save(self.opts.minimal, self.pv.visible, self.pv.spec.pos);
+                        crate::look_state::save(self.opts.minimal, self.pv.visible, self.pv.spec.pos, self.pv.spec.percent.then_some(self.pv.spec.size));
                     }
                     if !handled {
                         self.toast(format!("action not implemented yet: {other}"), true);
