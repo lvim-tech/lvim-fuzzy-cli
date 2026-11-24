@@ -198,6 +198,9 @@ pub(super) struct Preview {
     /// the area the preview was split off (its size is a share of it), and whether its edge is being dragged
     area: Option<Rect>,
     drag: bool,
+    /// the size moved with the keys and not yet written, and when the file was last written (see `divider-*`)
+    size_dirty: bool,
+    size_saved: Option<Instant>,
     /// Inner size of the last drawn preview (cols, lines).
     size: (u16, u16),
     force: bool,
@@ -715,6 +718,8 @@ pub fn run(opts: Options) -> Result<i32, String> {
         rect: None,
         area: None,
         drag: false,
+        size_dirty: false,
+        size_saved: None,
         size: (0, 0),
         force: false,
         oneoff: None,
@@ -1426,6 +1431,10 @@ impl App {
     }
 
     fn finish(mut self, outcome: Outcome, lines: Vec<String>) -> Result<i32, String> {
+        // a size moved with the keys that has not been written yet
+        if self.pv.size_dirty {
+            crate::look_state::save(self.opts.minimal, self.pv.visible, self.pv.spec.pos, Some(self.pv.spec.size));
+        }
         self.stop_commands();
         self.quit_nvim();
         for t in self.temps.drain(..) {

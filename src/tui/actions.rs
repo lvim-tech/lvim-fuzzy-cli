@@ -944,6 +944,35 @@ impl App {
                 }
                 // the whole text of the row under the cursor, as a tooltip over the list (any key hides it)
                 "row-tip" => self.tip = !self.tip_was,
+                // the divider between the list and the preview, a step (3%) toward the arrow: the preview grows when the
+                // divider moves away from its side, shrinks when it moves toward it
+                "divider-left" | "divider-right" | "divider-up" | "divider-down" => {
+                    use crate::preview::Pos;
+                    if self.preview_enabled() {
+                        let grow = match (self.pv.spec.pos, a.name.as_str()) {
+                            (Pos::Right, "divider-left") | (Pos::Left, "divider-right") => Some(true),
+                            (Pos::Right, "divider-right") | (Pos::Left, "divider-left") => Some(false),
+                            (Pos::Down, "divider-up") | (Pos::Up, "divider-down") => Some(true),
+                            (Pos::Down, "divider-down") | (Pos::Up, "divider-up") => Some(false),
+                            _ => None,
+                        };
+                        if let Some(grow) = grow {
+                            let cur = if self.pv.spec.percent { self.pv.spec.size } else { 50 };
+                            let next = if grow { cur + 3 } else { cur.saturating_sub(3) }.clamp(15, 85);
+                            self.pv.spec.percent = true;
+                            self.pv.spec.size = next;
+                            self.pv.spec.alt = None;
+                            // written at most once in a while (a held key would otherwise rewrite the file thirty times a
+                            // second); what is left over is written when the finder ends
+                            self.pv.size_dirty = true;
+                            if self.pv.size_saved.is_none_or(|t| t.elapsed() > Duration::from_millis(1500)) {
+                                crate::look_state::save(self.opts.minimal, self.pv.visible, self.pv.spec.pos, Some(next));
+                                self.pv.size_dirty = false;
+                                self.pv.size_saved = Some(Instant::now());
+                            }
+                        }
+                    }
+                }
                 "hide-header" => self.header_hidden = true,
                 "show-header" => self.header_hidden = false,
                 "toggle-header" => self.header_hidden = !self.header_hidden,

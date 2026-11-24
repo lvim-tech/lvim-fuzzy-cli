@@ -113,6 +113,10 @@ pub const ACTIONS: &[&str] = &[
     "reload-sync(",
     "replace-query",
     "row-tip",
+    "divider-left",
+    "divider-right",
+    "divider-up",
+    "divider-down",
     "search(",
     "select",
     "select-all",
@@ -584,6 +588,11 @@ pub fn default_keymap() -> KeyMap {
     b("ctrl-p", "toggle-preview");
     // (the whole text of the row, when it is cut)
     b("alt-i", "row-tip");
+    // (the divider between the list and the preview moves with the Shift-arrows; Alt-b / Alt-f move by a word in the query)
+    b("shift-left", "divider-left");
+    b("shift-right", "divider-right");
+    b("shift-up", "divider-up");
+    b("shift-down", "divider-down");
     b("tab", "toggle+down");
     b("shift-tab", "toggle+up");
     b("ctrl-a", "beginning-of-line");
@@ -595,9 +604,7 @@ pub fn default_keymap() -> KeyMap {
     b("ctrl-f", "forward-char");
     b("right", "forward-char");
     b("alt-b", "backward-word");
-    b("shift-left", "backward-word");
     b("alt-f", "forward-word");
-    b("shift-right", "forward-word");
     b("bspace", "backward-delete-char");
     b("ctrl-bspace", "backward-delete-char");
     b("del", "delete-char");
