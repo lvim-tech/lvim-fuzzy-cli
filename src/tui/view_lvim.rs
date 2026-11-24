@@ -142,6 +142,10 @@ impl App {
             g2.extend(one("toggle-scope", &label));
         }
         let mut g3 = Vec::new();
+        // the row under the cursor is cut by the width: its whole text is one key away
+        if self.cursor_cut {
+            g2.extend(one("row-tip", "full row"));
+        }
         g3.extend(one("cd", "cd"));
         g3.extend(one("mode-menu", "modes"));
         g3.extend(one("help", "help"));
@@ -214,57 +218,82 @@ impl App {
         cv.put(w.saturating_sub(cw), y, &counter, l.counter, w);
     }
 
+    /// The button bar: ONE row, the buttons (a key chip and a label chip each) a sliver apart. When they do not all fit the
+    /// bar scrolls — the wheel over it, or the chevron boxes at its ends, move it a button at a time.
     fn draw_footer(&mut self, cv: &mut Canvas, l: &Look, y: u16, w: u16) {
         cv.fill(Rect { x: 0, y, w, h: 1 }, l.panel);
-        let groups = self.footer_groups();
-        // buttons " key " + " label ", one space apart — the way lvim-picker's footer
-        // draws them (no separator between the groups)
-        let mut spans: Vec<(String, Style, Option<usize>)> = Vec::new(); // text, style, button index
+        self.footer_y = y;
         let mut actions: Vec<Vec<Action>> = Vec::new();
-        for (gi, g) in groups.iter().enumerate() {
-            if gi > 0 {
-                spans.push((" ".into(), l.panel, None));
-            }
-            for (bi, (k, label, acts)) in g.iter().enumerate() {
-                if bi > 0 {
-                    spans.push((" ".into(), l.panel, None));
-                }
-                let idx = actions.len();
-                actions.push(acts.clone());
-                spans.push((format!(" {k} "), l.footer_key, Some(idx)));
-                spans.push((format!(" {label} "), l.footer_label, Some(idx)));
+        let mut btns: Vec<(String, String)> = Vec::new();
+        for g in self.footer_groups() {
+            for (k, label, acts) in g {
+                btns.push((format!(" {k} "), format!(" {label} ")));
+                actions.push(acts);
             }
         }
-        let total: usize = spans.iter().map(|s| str_width(&s.0)).sum();
-        let mut x = if (total as u16) < w {
-            (w - total as u16) / 2
-        } else {
-            0
-        };
-        let mut over = false;
+        let widths: Vec<usize> = btns.iter().map(|(k, lb)| str_width(k) + str_width(lb)).collect();
+        let total: usize = widths.iter().sum::<usize>() + btns.len().saturating_sub(1);
         self.buttons.clear();
-        for (text, st, bi) in spans {
-            let sw = str_width(&text) as u16;
-            if x + sw > w.saturating_sub(2) && total as u16 >= w {
-                over = true;
+        let chev = |t: &str, st: Style| (t.to_string(), st);
+        let scroll_name = |n: &str| vec![Action { name: n.to_string(), arg: None }];
+        // a sliver between two buttons: the right eighth of this cell is the bar's own colour
+        let sliver = Style { fg: l.panel.bg, bg: l.footer_label.bg, ..l.panel };
+        if total <= w as usize {
+            self.footer_off = 0;
+            let mut x = (w - total as u16) / 2;
+            for (i, (k, lb)) in btns.iter().enumerate() {
+                if i > 0 {
+                    x = cv.put(x, y, "\u{2595}", sliver, w);
+                }
+                let x0 = x;
+                x = cv.put(x, y, k, l.footer_key, w);
+                x = cv.put(x, y, lb, l.footer_label, w);
+                self.buttons.push(Button { x0, x1: x, y, actions: actions[i].clone() });
+            }
+            self.footer_fits = true;
+            return;
+        }
+        self.footer_fits = false;
+        // the room between the two chevron boxes
+        let cw = 3u16;
+        let room = (w.saturating_sub(2 * cw)) as usize;
+        self.footer_off = self.footer_off.min(btns.len().saturating_sub(1));
+        // the last offset that still fills the bar: scrolling stops there
+        let mut max_off = btns.len().saturating_sub(1);
+        let mut acc = 0usize;
+        for i in (0..btns.len()).rev() {
+            acc += widths[i] + usize::from(i + 1 < btns.len());
+            if acc > room {
                 break;
             }
-            let x0 = x;
-            x = cv.put(x, y, &text, st, w);
-            if let Some(i) = bi {
-                match self.buttons.last_mut() {
-                    Some(b) if b.x1 == x0 && b.actions == actions[i] => b.x1 = x,
-                    _ => self.buttons.push(Button {
-                        x0,
-                        x1: x,
-                        y,
-                        actions: actions[i].clone(),
-                    }),
-                }
-            }
+            max_off = i;
         }
-        if over {
-            cv.put(w.saturating_sub(2), y, " ❯", l.chevron, w);
+        self.footer_off = self.footer_off.min(max_off);
+        let off = self.footer_off;
+        let (t, st) = chev(if off > 0 { " \u{2039} " } else { "   " }, l.chevron);
+        let mut x = cv.put(0, y, &t, st, w);
+        if off > 0 {
+            self.buttons.push(Button { x0: 0, x1: cw, y, actions: scroll_name("footer-left") });
+        }
+        let limit = w - cw;
+        let mut more = false;
+        for i in off..btns.len() {
+            let need = widths[i] + usize::from(i > off);
+            if x as usize + need > limit as usize {
+                more = true;
+                break;
+            }
+            if i > off {
+                x = cv.put(x, y, "\u{2595}", sliver, limit);
+            }
+            let x0 = x;
+            x = cv.put(x, y, &btns[i].0, l.footer_key, limit);
+            x = cv.put(x, y, &btns[i].1, l.footer_label, limit);
+            self.buttons.push(Button { x0, x1: x, y, actions: actions[i].clone() });
+        }
+        if more {
+            cv.put(limit, y, " \u{203a} ", l.chevron, w);
+            self.buttons.push(Button { x0: limit, x1: w, y, actions: scroll_name("footer-right") });
         }
     }
 
@@ -600,9 +629,11 @@ impl App {
                         x,
                         y,
                         clip,
+                        // the cut mark in the colour of a match (red), as in lvc
                         Style {
+                            fg: l.matched.fg,
                             bg: base.bg,
-                            ..l.count
+                            ..base
                         },
                         limit,
                     );
@@ -668,8 +699,11 @@ impl App {
                 let shown = lock_w
                     + usize::from(start > lock)
                     + widths[start.min(widths.len())..].iter().sum::<usize>();
+                if hit == self.cursor {
+                    self.cursor_cut = shown > room;
+                }
                 if shown > room && limit > r.x {
-                    cv.put(limit - 1, y, clip, Style { bg: base.bg, ..l.count }, limit);
+                    cv.put(limit - 1, y, clip, Style { fg: l.matched.fg, bg: base.bg, ..base }, limit);
                 }
             }
             y += 1;
@@ -840,22 +874,23 @@ impl App {
             // the title bar and the button bar each take a row, unless hidden
             let show_title = !self.hidden("title");
             let show_footer = !self.hidden("footer");
+            let fh = u16::from(show_footer);
             let mut row = 0u16;
             let mut bar_y = None;
             if bar_top && show_footer {
                 bar_y = Some(row);
-                row += 1;
+                row += fh;
             }
             if show_title {
                 self.draw_title_bar(&mut cv, &l, row, w);
                 row += 1;
             }
             if !bar_top && show_footer {
-                bar_y = Some(h - 1);
+                bar_y = Some(h.saturating_sub(fh));
             }
             // panels: between the title and the bar, inset by the blank content ring
             let top = row;
-            let bottom = if !bar_top && show_footer { h - 1 } else { h };
+            let bottom = if !bar_top && show_footer { h.saturating_sub(fh) } else { h };
             let mut area = Rect {
                 x: 0,
                 y: top,

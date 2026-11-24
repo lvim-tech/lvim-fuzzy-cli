@@ -169,6 +169,12 @@ struct App {
     /// `row-tip`: the whole text of the row under the cursor is shown over the list
     tip: bool,
     tip_was: bool,
+    /// the row under the cursor is cut at the end by the width of the list (the footer then offers `row-tip`)
+    cursor_cut: bool,
+    /// the button bar: the first button shown (it scrolls when they do not all fit), its row, and whether all fit
+    footer_off: usize,
+    footer_y: u16,
+    footer_fits: bool,
     // preview
     pv: Preview,
     term_w: u16,
@@ -857,6 +863,10 @@ pub fn run(opts: Options) -> Result<i32, String> {
         last_click: None,
         tip: false,
         tip_was: false,
+        cursor_cut: false,
+        footer_off: 0,
+        footer_y: 0,
+        footer_fits: true,
         pv,
         term_w: 0,
         term_h: 0,
@@ -1862,6 +1872,21 @@ impl App {
                             return self.run_actions(&acts, Some(term));
                         }
                         return Ok(None);
+                    }
+                }
+                // the wheel over the button bar scrolls it
+                if m.row == self.footer_y && !self.footer_fits {
+                    use crossterm::event::MouseEventKind as K;
+                    match m.kind {
+                        K::ScrollDown | K::ScrollRight => {
+                            self.footer_off += 1;
+                            return Ok(None);
+                        }
+                        K::ScrollUp | K::ScrollLeft => {
+                            self.footer_off = self.footer_off.saturating_sub(1);
+                            return Ok(None);
+                        }
+                        _ => {}
                     }
                 }
                 if let crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) =

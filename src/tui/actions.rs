@@ -944,6 +944,9 @@ impl App {
                 }
                 // the whole text of the row under the cursor, as a tooltip over the list (any key hides it)
                 "row-tip" => self.tip = !self.tip_was,
+                // the button bar scrolls by a button (its chevron boxes)
+                "footer-left" => self.footer_off = self.footer_off.saturating_sub(1),
+                "footer-right" => self.footer_off += 1,
                 // the divider between the list and the preview, a step (3%) toward the arrow: the preview grows when the
                 // divider moves away from its side, shrinks when it moves toward it
                 "divider-left" | "divider-right" | "divider-up" | "divider-down" => {

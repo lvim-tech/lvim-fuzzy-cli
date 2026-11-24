@@ -351,7 +351,9 @@ pub fn key_name(e: &KeyEvent) -> Option<String> {
                         });
                     }
                     'h' if !alt => return Some("bspace".into()),
-                    'i' if !alt => return Some("tab".into()),
+                    // Ctrl-i arrives as a key of its own only where the terminal tells it from Tab (the kitty keyboard
+                    // protocol); anywhere else the terminal sends Tab and it is read as Tab (a KeyCode::Tab)
+                    'i' if !alt => return Some("ctrl-i".into()),
                     '[' => return Some("esc".into()),
                     // the terminal sends 0x1c..0x1f, which crossterm reads as ctrl-4..7
                     '4' => "\\".to_string(),
@@ -587,7 +589,7 @@ pub fn default_keymap() -> KeyMap {
     // (fzf has ctrl-p as up: here ctrl-p is the preview of the row, shown and hidden; ctrl-k and the arrow move up)
     b("ctrl-p", "toggle-preview");
     // (the whole text of the row, when it is cut)
-    b("alt-i", "row-tip");
+    b("ctrl-i", "row-tip");
     // (the divider between the list and the preview moves with the Shift-arrows; Alt-b / Alt-f move by a word in the query)
     b("shift-left", "divider-left");
     b("shift-right", "divider-right");
