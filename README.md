@@ -305,9 +305,12 @@ values (themes and user modes are read live).
 
 ## Build
 
+The lvim-tech crates it builds on (lvim-fuzzy-core, lvim-fuzzy-ui, lvim-fuzzy-plugin) are git dependencies, so a lone clone builds by itself.
+`scripts/install.sh` also fetches and builds the plugin host and the preview / open plugins lfz runs through. The Neovim plugins are not needed.
+
 ```sh
 cargo build --release
-./target/release/lvim-fuzzy --help
+./target/release/lvim-fuzzy-cli --help
 ```
 
 ## The plugins and where each is used

@@ -12,14 +12,14 @@ name = "lvim-fuzzy-cli"
 path = "src/main.rs"
 
 [dependencies]
-# the search engine (a path until lvim-fuzzy-core is tagged; then git + tag)
-lvim-fuzzy-core = { path = "../lvim-fuzzy-core" }
+# the search engine (the lvim-tech repositories are git dependencies: a lone clone builds; local checkouts are patched in by ../.cargo/config.toml)
+lvim-fuzzy-core = { git = "https://github.com/lvim-tech/lvim-fuzzy-core.git" }
 # the lvim look: themes, canvas, icons, previews, the Neovim pool (shared with lvim-fuzzy-commander)
-lvim-fuzzy-ui = { path = "../lvim-fuzzy-ui" }
+lvim-fuzzy-ui = { git = "https://github.com/lvim-tech/lvim-fuzzy-ui.git" }
 # the plugin host: the preview providers (lvim-fuzzy-plugin-preview ...) are plugins; only `process` runtime is needed here
 # the preview plugin ships inside this program (`lvim-fuzzy --lvim-plugin preview`) and installs itself
 # ... and the open plugin (`lvim-fuzzy --lvim-plugin open`)
-lvim-fuzzy-plugin = { path = "../lvim-fuzzy-plugin", default-features = false }
+lvim-fuzzy-plugin = { git = "https://github.com/lvim-tech/lvim-fuzzy-plugin.git", default-features = false }
 crossterm = { version = "0.29", features = ["use-dev-tty"] }
 rayon = "1.12"
 regex = "1.12"
