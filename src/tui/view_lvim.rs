@@ -317,7 +317,7 @@ impl App {
             x = if self.opts.prompt == "> " {
                 cv.put_search_badge(x, r.y, lvim_fuzzy_ui::lvim::search_badge_style(l), limit)
             } else {
-                cv.put(x, r.y, &badge, l.prompt, limit)
+                cv.put(x, r.y, &badge, Style { bg: field_st.bg, ..l.prompt }, limit)
             };
         }
         let counter = if minimal {

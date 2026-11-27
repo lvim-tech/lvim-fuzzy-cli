@@ -200,6 +200,33 @@ pub fn self_exe() -> String {
         .unwrap_or_else(|_| "lvim-fuzzy-cli".into())
 }
 
+/// `--modes-json`: every mode (the built-in ones and the config's) as a JSON array, for a front end that lists them (the Neovim picker).
+fn modes_json() -> i32 {
+    let list: Vec<serde_json::Value> = all_modes()
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "name": m.name,
+                "description": m.description,
+                "title": m.title,
+                "command": m.command,
+                "live": m.live,
+                "pattern": m.pattern,
+                "preview": m.preview,
+                "target": m.target,
+                "scope": m.scope,
+                "requires": m.requires,
+                "missing": m.missing(),
+                "options": m.options,
+                "open": m.open,
+                "builtin": m.builtin,
+            })
+        })
+        .collect();
+    println!("{}", serde_json::Value::Array(list));
+    0
+}
+
 /// `--list-modes`: one `name<TAB>description` line per mode (for `lvim-fuzzy mode`).
 fn list_modes() -> i32 {
     for m in all_modes() {
@@ -384,12 +411,13 @@ fn real_main(argv_in: &[String]) -> Result<i32, String> {
 
     if matches!(
         argv.first().map(String::as_str),
-        Some("--list-modes" | "--describe-mode" | "--complete-list" | "config")
+        Some("--list-modes" | "--modes-json" | "--describe-mode" | "--complete-list" | "config")
     ) {
         quiet_on_sigpipe();
     }
     match argv.first().map(String::as_str) {
         Some("--list-modes") => return Ok(list_modes()),
+        Some("--modes-json") => return Ok(modes_json()),
         Some("--complete-list") => {
             return Ok(complete_list(
                 argv.get(1).map(String::as_str).unwrap_or(""),
