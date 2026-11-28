@@ -403,8 +403,9 @@ impl App {
         let (top, bot, total) = g.view;
         let shown = bot.saturating_sub(top) + 1;
         if bar_on && top >= 1 && total > shown && gh > 1 && inner.w >= 2 {
-            let bar = (gh * shown / total).max(1).min(gh);
-            let pos = (top - 1) * (gh - bar) / (total - shown);
+            // as long at every place: the rows of the pane over the lines of the file (the lines shown vary where long ones wrap)
+            let bar = (gh * gh / total).max(1).min(gh);
+            let pos = ((top - 1) * (gh - bar) / (total - shown)).min(gh - bar);
             let x = bar_x;
             for k in 0..bar {
                 cv.put(x, inner.y + (pos + k).min(gh - 1) as u16, bar_char, bar_style, x + 1);
@@ -783,12 +784,30 @@ impl App {
             );
         }
         let [t, rt, b, l] = sides;
-        let inner = Rect {
+        let mut inner = Rect {
             x: r.x + l as u16 + l as u16,
             y: r.y + t as u16,
             w: r.w.saturating_sub((l as u16 + rt as u16) * 2),
             h: r.h.saturating_sub(t as u16 + b as u16),
         };
+        // the lvim look: the text starts one cell in, under the icon of the file bar above it (as in lvc)
+        if look.is_some() && !l && inner.w > 1 {
+            inner.x += 1;
+            inner.w -= 1;
+        }
+        // a text preview (the file, or the Neovim that paints it) has the blue bar of the lines shown above it, as in lvc
+        let mut bar: Option<Rect> = None;
+        if look.is_some()
+            && !l
+            && self.pv.active != Some(Provider::Plugin)
+            && (self.nvim_mode() || self.pv.active == Some(Provider::File))
+            && inner.h > 1
+        {
+            // from the text's column less one: the bar's own leading space is the indent the text has
+            bar = Some(Rect { x: inner.x - 1, y: inner.y, w: inner.w + 1, h: 1 });
+            inner.y += 1;
+            inner.h -= 1;
+        }
         self.pv.size = (inner.w, inner.h);
         if inner.w == 0 || inner.h == 0 {
             return;
@@ -826,14 +845,36 @@ impl App {
                     n.size(inner.w as usize, inner.h as usize);
                 }
                 self.draw_file(cv, inner);
+                if let (Some(r), Some(lk)) = (bar, look) {
+                    lvim_fuzzy_ui::listview::scroll_bar(cv, lk, r, self.pv.offset, self.preview_lines_total(), inner.h as usize);
+                }
                 return;
             }
             self.draw_nvim(cv, inner);
+            // the indent is padding, not margin: the cell left of the text is the preview's own colour (Neovim's), as the text rows are
+            if bar.is_some() && inner.x > 0 {
+                let bg = self.pv.nvim.as_ref().and_then(|n| n.grid.lock().unwrap().default_bg);
+                if bg.is_some() {
+                    for y in inner.y..inner.y + inner.h {
+                        cv.fill(Rect { x: inner.x - 1, y, w: 1, h: 1 }, Style { bg, ..Style::default() });
+                    }
+                }
+            }
+            if let (Some(r), Some(lk)) = (bar, look) {
+                let (top, bot, total) = self.pv.nvim.as_ref().map(|n| n.grid.lock().unwrap().view).unwrap_or((0, 0, 0));
+                if total > 0 {
+                    let shown = (bot + 1).saturating_sub(top.max(1));
+                    lvim_fuzzy_ui::listview::scroll_bar(cv, lk, r, top.max(1) - 1, total, shown.max(1));
+                }
+            }
             return;
         }
         if self.pv.active == Some(Provider::File) {
             self.draw_file(cv, inner);
             self.draw_preview_scrollbar(cv, inner, self.preview_lines_total(), self.pv.offset);
+            if let (Some(r), Some(lk)) = (bar, look) {
+                lvim_fuzzy_ui::listview::scroll_bar(cv, lk, r, self.pv.offset, self.preview_lines_total(), inner.h as usize);
+            }
             return;
         }
         if self.pv.active.is_none() && self.pv.oneoff.is_none() {

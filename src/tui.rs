@@ -522,7 +522,7 @@ pub(crate) fn build_keymap(
             );
         }
     }
-    // standalone at a terminal: enter opens the item in the editor and ctrl-y
+    // standalone at a terminal: enter opens the item in the editor and alt-y
     // prints it; when the output is read by a program (shell keys, `$(lfz)`),
     // enter prints, as in fzf
     {
@@ -536,7 +536,7 @@ pub(crate) fn build_keymap(
         if std::io::stdout().is_terminal() && opts.expect.is_empty() {
             keymap.insert("enter".into(), act("open"));
         }
-        keymap.insert("ctrl-y".into(), act("accept"));
+        keymap.insert("alt-y".into(), act("accept"));
         keymap.insert("shift-enter".into(), act("cd"));
     }
     for b in &opts.binds {
@@ -1735,14 +1735,17 @@ impl App {
                 if expect.iter().any(|e| *e == name) {
                     return Ok(Some(Outcome::Accept { key: Some(name) }));
                 }
-                // while the preview is shown, ctrl-d / ctrl-u scroll it by half a page and ctrl-f / ctrl-b by a page (vim's keys): the keys
-                // that edit the query otherwise (delete, clear, forward, back), unless they are bound to something else
+                // while the preview is shown, ctrl-d / ctrl-u scroll it by half a page, ctrl-f / ctrl-b by a page and ctrl-e / ctrl-y by a line
+                // (vim's keys): the keys that edit the query otherwise (delete, clear, forward, back, end, yank), unless they are bound to
+                // something else
                 if self.preview_enabled() {
                     let (editing, scroll) = match name.as_str() {
                         "ctrl-d" => ("delete-char/eof", "preview-half-page-down"),
                         "ctrl-u" => ("unix-line-discard", "preview-half-page-up"),
                         "ctrl-f" => ("forward-char", "preview-page-down"),
                         "ctrl-b" => ("backward-char", "preview-page-up"),
+                        "ctrl-e" => ("end-of-line", "preview-down"),
+                        "ctrl-y" => ("yank", "preview-up"),
                         _ => ("", ""),
                     };
                     if !scroll.is_empty()

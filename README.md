@@ -105,7 +105,7 @@ F5 theme.
 
 **Enter** opens the item in the editor (grep results at their line; `editor`
 in the config, `nvim` by default, `{file}` `{line}` `{col}` in a template);
-**ctrl-y** prints it. When the output goes to a program (the shell keys,
+**alt-y** prints it (**ctrl-d** / **ctrl-u**, **ctrl-f** / **ctrl-b** and **ctrl-e** / **ctrl-y** scroll the preview by half a page, a page and a line). When the output goes to a program (the shell keys,
 `$(lvim-fuzzy-cli)`, scripts) enter prints, as in fzf; an item that is not a file
 is printed too. A mode says what open means for its items with `open`: the
 built-in ones switch the tmux / Zellij session, show a commit, tag or stash,
