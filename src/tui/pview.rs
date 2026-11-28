@@ -209,7 +209,8 @@ impl App {
             };
         }
         let off = self.pv.offset.min(max_off);
-        let nr_w = if view.is_dir {
+        // the lvim look has no number column, as the Neovim that takes this preview over has none (the first paint is then the last)
+        let nr_w = if view.is_dir || self.look.is_some() {
             0
         } else {
             total.max(1).to_string().len() as u16 + 1
