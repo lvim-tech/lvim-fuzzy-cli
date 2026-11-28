@@ -84,7 +84,9 @@ lvim-fuzzy-cli --mode history       # the same, as an option
 Inside the finder, **F2** opens the mode menu: pick another mode and the finder
 switches in place, keeping the query.
 
-Built-in modes: `files`, `dirs`, `grep`, `grep-filter`, `git-files`,
+The built-in modes are the **modes plugin's** (`lvim-fuzzy-plugin-modes`, installed with lfz): lfz carries no definitions, it asks the plugin, so
+they are settings you can change, add to or switch off (`[modes.NAME]` in `~/.config/lvim-plugins/lvim-fuzzy-plugin-modes.toml`, see its README).
+Without the plugin lfz starts with only the modes of your own config, and `lfz doctor` says so. They are: `files`, `dirs`, `grep`, `grep-filter`, `git-files`,
 `git-status`, `git-log`, `git-branches`, `git-stash`, `git-tags`, `git-reflog`,
 `history`, `processes`, `ports`, `man`, `env`, `commands`, `tmux`, `zellij`,
 `docker`, `docker-images`, `systemd`, `systemd-user`, `journal`, `ssh`, `fonts`,

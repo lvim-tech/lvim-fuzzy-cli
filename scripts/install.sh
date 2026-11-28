@@ -71,4 +71,4 @@ fi
 case ":$PATH:" in *":$bin:"*) ;; *) echo "note: $bin is not in PATH";; esac
 # the plugin host and the preview / open plugins lfz runs through: fetched and built when missing
 boot=../lvim-fuzzy-plugin/scripts/bootstrap.sh
-if [ -f "$boot" ]; then sh "$boot" host preview open; else curl -fsSL https://raw.githubusercontent.com/lvim-tech/lvim-fuzzy-plugin/main/scripts/bootstrap.sh | sh -s -- host preview open; fi
+if [ -f "$boot" ]; then sh "$boot" host preview open modes; else curl -fsSL https://raw.githubusercontent.com/lvim-tech/lvim-fuzzy-plugin/main/scripts/bootstrap.sh | sh -s -- host preview open modes; fi

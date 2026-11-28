@@ -503,9 +503,11 @@ pub fn load(explicit: Option<&str>) -> Result<Config, Vec<String>> {
     }
     // shell keys name modes: built-in, user or shell-history
     for b in &shell_cfg.binds {
+        // (without the modes plugin the built-in names are not known: a key naming one is not a mistake — `lfz doctor` says the plugin is missing)
         let known = b.mode == "shell-history"
             || modes::builtin().iter().any(|m| m.name == b.mode)
-            || modes_out.iter().any(|m| m.name == b.mode);
+            || modes_out.iter().any(|m| m.name == b.mode)
+            || modes::builtin_error().is_some();
         if !known {
             errs.push(format!("{}: shell.keys.\"{}\": unknown mode `{}` (`lvim-fuzzy-cli mode` lists them; or shell-history)", at(&b.key), b.key, b.mode));
         }

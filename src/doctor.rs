@@ -179,6 +179,9 @@ pub fn run(explicit: Option<&str>) -> i32 {
     // ── modes ───────────────────────────────────────────────────────────────
     r.section("Modes");
     let builtin = modes::builtin();
+    if let Some(why) = modes::builtin_error() {
+        r.error(format!("no modes from `lvim-fuzzy-plugin-modes`: {why} (install it: lvim-fuzzy-plugin-modes/scripts/install.sh)"));
+    }
     let usable = builtin.iter().filter(|m| m.missing().is_empty()).count();
     r.ok(format!(
         "{usable} of {} built-in modes can run",
